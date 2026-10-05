@@ -1,12 +1,11 @@
 import { pgTable, uuid, numeric, varchar, boolean, timestamp, integer } from 'drizzle-orm/pg-core';
 
 /**
- * Definición de la tabla `pagos` en Drizzle ORM.
+ * Esquema de base de datos para `pagos` (Drizzle ORM).
  *
- * Principios:
- *  - Los nombres de columna siguen snake_case (convención de PostgreSQL).
- *  - El modelo de dominio (PagoModel) usará camelCase — la conversión la hace el mapper.
- *  - numeric() para montos monetarios para evitar errores de punto flotante en BD.
+ * En Arquitectura Hexagonal:
+ *  - Este archivo pertenece exclusivamente a la infraestructura (Adaptador de persistencia).
+ *  - El dominio NO conoce esta definición de tabla.
  */
 export const pagosTable = pgTable('pagos', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -16,7 +15,6 @@ export const pagosTable = pgTable('pagos', {
   numeroPago: integer('numero_pago').notNull(),
 
   // ── Montos ────────────────────────────────────────────────────────────────
-  // precision=12, scale=2 → soporta hasta $9,999,999,999.99
   monto: numeric('monto', { precision: 12, scale: 2 }).notNull(),
   montoEfectivo: numeric('monto_efectivo', { precision: 12, scale: 2 })
     .notNull()
@@ -52,8 +50,5 @@ export const pagosTable = pgTable('pagos', {
     .defaultNow(),
 });
 
-/** Tipo inferido de una fila SELECT — usado SOLO dentro del mapper, nunca exportado al dominio */
 export type PagoRow = typeof pagosTable.$inferSelect;
-
-/** Tipo inferido para INSERT — usado SOLO en el repository */
 export type NewPagoRow = typeof pagosTable.$inferInsert;

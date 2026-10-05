@@ -13,19 +13,9 @@ export const zEstadoPago = z.enum([
 ]);
 
 // ─────────────────────────────────────────────
-// Contrato de ENTRADA — Crear un Pago
+// DTO de ENTRADA — Crear un Pago (Command)
 // ─────────────────────────────────────────────
 
-/**
- * zPagoCreate — validado en el Controller antes de llegar al Service.
- *
- * Reglas de negocio expresadas en Zod:
- *  - El monto total debe ser > 0.
- *  - Si el método es 'efectivo', montoEfectivo debe cubrir el total.
- *  - Si el método es 'transferencia', montoTransferencia debe cubrir el total.
- *  - Si el método es 'hibrido', ambos montos deben ser > 0 y sumar el total.
- *  - El comprobante es obligatorio cuando hay monto por transferencia.
- */
 export const zPagoCreate = z
   .object({
     tandaId: z.string().uuid({ message: 'tandaId debe ser un UUID válido' }),
@@ -106,17 +96,12 @@ export const zPagoCreate = z
     }
   });
 
-/** Tipo TypeScript inferido del schema de creación */
 export type CreatePagoDto = z.infer<typeof zPagoCreate>;
 
 // ─────────────────────────────────────────────
-// Contrato de SALIDA — Respuesta de un Pago
+// DTO de SALIDA — Respuesta de un Pago
 // ─────────────────────────────────────────────
 
-/**
- * zPagoResponse — usado en el Controller para serializar la respuesta.
- * Garantiza que NUNCA se filtren campos internos (ej. datos de auditoría sensibles).
- */
 export const zPagoResponse = z.object({
   id: z.string().uuid(),
   tandaId: z.string().uuid(),
@@ -137,5 +122,4 @@ export const zPagoResponse = z.object({
   updatedAt: z.coerce.date(),
 });
 
-/** Tipo TypeScript inferido del schema de respuesta */
 export type PagoResponseDto = z.infer<typeof zPagoResponse>;

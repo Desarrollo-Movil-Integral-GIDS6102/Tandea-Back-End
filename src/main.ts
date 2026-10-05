@@ -30,4 +30,4 @@ async function bootstrap() {
   console.log(`🚀 Tandea API corriendo en: http://localhost:${port}/api/v1`);
 }
 
-bootstrap();
+void bootstrap();
