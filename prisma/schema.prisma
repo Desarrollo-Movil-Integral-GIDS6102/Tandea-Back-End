@@ -1,0 +1,374 @@
+// =============================================================================
+// Tandea — schema.prisma (PostgreSQL)
+// Basado en: "Anexo — Documentación de la Base de Datos" (Planeación Técnica)
+//
+// REVISIÓN OBLIGATORIA: este schema debe ser revisado y aprobado por los 3
+// integrantes (Brandon, Karen, Lizeth) vía Pull Request antes de migrar.
+//
+// Todos los modelos se crean juntos para que las FK cruzadas
+// (Evidence -> Payment/Payout, Dispute -> Payment/Payout) queden en UNA sola
+// migración.
+//
+// Reglas que Prisma NO puede expresar (van en SQL dentro de la migración):
+//   - CHECK en evidence: exactamente uno de id_payment / id_payout lleno
+//   (ver bloque SQL al final de este archivo)
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// ENUMs de status (PROPUESTA de valores: el documento solo pide que sean ENUM;
+// los valores salen de las reglas de negocio. Confirmar entre los 3.)
+// -----------------------------------------------------------------------------
+
+enum TandaStatus {
+  PENDIENTE   // creada, aún se unen participantes
+  ACTIVA      // en curso
+  FINALIZADA  // todas las vueltas completadas
+  SUSPENDIDA  // suspendida por Administrador Global
+  CANCELADA
+
+  @@map("tanda_status")
+}
+
+enum NumberStatus {
+  PENDIENTE                         // aún no le toca cobrar
+  EN_RIESGO                         // pagos faltantes y sin número muerto disponible
+  ENTREGA_PENDIENTE_CONFIRMACION    // organizador subió evidencia, falta confirmar receptor
+  ENTREGADO                         // doble confirmación completa, turno cerrado
+
+  @@map("number_status")
+}
+
+enum PaymentStatus {
+  PENDIENTE   // falta alguna de las dos confirmaciones
+  CONFIRMADO  // confirmed_by_participant AND confirmed_by_admin
+  RECHAZADO   // el organizador lo rechazó
+
+  @@map("payment_status")
+}
+
+enum PayoutStatus {
+  PENDIENTE   // falta alguna de las dos confirmaciones
+  CONFIRMADO  // confirmed_by_admin AND confirmed_by_recipient
+  RECHAZADO
+
+  @@map("payout_status")
+}
+
+enum DisputeStatus {
+  ABIERTA
+  EN_REVISION
+  RESUELTA
+  DESCARTADA
+
+  @@map("dispute_status")
+}
+
+// -----------------------------------------------------------------------------
+// Role  (con deletedAt)
+// -----------------------------------------------------------------------------
+model Role {
+  idRole      Int       @id @default(autoincrement()) @map("id_role")
+  nameRole    String    @map("name_role") @db.VarChar(100)
+  description String?   @db.Text
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  users User[]
+
+  @@map("role")
+}
+
+// -----------------------------------------------------------------------------
+// User  (con deletedAt)
+// -----------------------------------------------------------------------------
+model User {
+  idUser       Int       @id @default(autoincrement()) @map("id_user")
+  name         String    @db.VarChar(100)
+  lastName     String    @map("last_name") @db.VarChar(100)
+  age          Int?
+  gender       String?   @db.VarChar(50) // informativo, sin uso funcional en MVP
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  idRole       Int       @map("id_role")
+  active       Boolean   @default(true) // false = suspendido por Admin Global
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  role Role @relation(fields: [idRole], references: [idRole])
+
+  tandasAdministradas Tanda[]          @relation("TandaAdmin")
+  numbers             Number[]
+  notifications       Notification[]
+  disputesReported    Dispute[]        @relation("DisputeReporter")
+  disputesResolved    Dispute[]        @relation("DisputeResolver")
+  auditLogs           AuditLog[]
+  platformConfigs     PlatformConfig[]
+
+  @@index([idRole])
+  @@map("user")
+}
+
+// -----------------------------------------------------------------------------
+// TandaType  (catálogo, sin deletedAt)
+// -----------------------------------------------------------------------------
+model TandaType {
+  idTandaType Int     @id @default(autoincrement()) @map("id_tanda_type")
+  name        String  @db.VarChar(100)
+  description String? @db.Text
+
+  tandas Tanda[]
+
+  @@map("tanda_type")
+}
+
+// -----------------------------------------------------------------------------
+// Tanda  (con deletedAt)
+// -----------------------------------------------------------------------------
+model Tanda {
+  idTanda            Int         @id @default(autoincrement()) @map("id_tanda")
+  name               String      @db.VarChar(150)
+  description        String?     @db.Text
+  startDate          DateTime    @map("start_date") @db.Date
+  endDate            DateTime?   @map("end_date") @db.Date // nulo mientras esté activa
+  contributionAmount Decimal     @map("contribution_amount") @db.Decimal(12, 2)
+  numParticipants    Int         @map("num_participants")
+  numRounds          Int         @map("num_rounds")
+  graceDays          Int         @map("grace_days")
+  hasDeadNumber      Boolean     @default(false) @map("has_dead_number")
+  idTandaType        Int         @map("id_tanda_type")
+  idAdmin            Int         @map("id_admin") // organizador de ESTA tanda
+  status             TandaStatus @default(PENDIENTE)
+  active             Boolean     @default(true)
+  inviteCode         String      @unique @map("invite_code") @db.VarChar(20)
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  deletedAt          DateTime?   @map("deleted_at")
+
+  tandaType TandaType @relation(fields: [idTandaType], references: [idTandaType])
+  admin     User      @relation("TandaAdmin", fields: [idAdmin], references: [idUser])
+
+  numbers       Number[]
+  notifications Notification[]
+  disputes      Dispute[]
+
+  @@index([idAdmin])
+  @@index([idTandaType])
+  @@map("tanda")
+}
+
+// -----------------------------------------------------------------------------
+// Number  (con deletedAt) — identidad del turno dentro de una vuelta
+// Sin campos cacheados (pending_balance, missed_payments_count,
+// has_received_payout): se derivan consultando payment/payout.
+// -----------------------------------------------------------------------------
+model Number {
+  idNumber     Int          @id @default(autoincrement()) @map("id_number")
+  numberValue  Int          @map("number_value")
+  idUser       Int?         @map("id_user") // null si es número muerto
+  idTanda      Int          @map("id_tanda")
+  isDeadNumber Boolean      @default(false) @map("is_dead_number")
+  roundNumber  Int          @map("round_number")
+  status       NumberStatus @default(PENDIENTE)
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  user  User?  @relation(fields: [idUser], references: [idUser])
+  tanda Tanda  @relation(fields: [idTanda], references: [idTanda])
+
+  payments Payment[]
+  payouts  Payout[]
+
+  // Mismo número puede repetirse entre vueltas, nunca dos veces en la misma
+  // vuelta de la misma tanda.
+  @@unique([idTanda, roundNumber, numberValue])
+  @@index([idUser])
+  @@map("number")
+}
+
+// -----------------------------------------------------------------------------
+// Payment  (SIN deletedAt)
+// total_amount = transfer_amount + cash_amount  -> validar en PagoService
+// -----------------------------------------------------------------------------
+model Payment {
+  idPayment              Int           @id @default(autoincrement()) @map("id_payment")
+  idNumber               Int           @map("id_number")
+  transferAmount         Decimal       @default(0) @map("transfer_amount") @db.Decimal(12, 2)
+  cashAmount             Decimal       @default(0) @map("cash_amount") @db.Decimal(12, 2)
+  totalAmount            Decimal       @map("total_amount") @db.Decimal(12, 2)
+  ocrDetectedAmount      Decimal?      @map("ocr_detected_amount") @db.Decimal(12, 2)
+  ocrVerified            Boolean       @default(false) @map("ocr_verified")
+  confirmedByParticipant Boolean       @default(false) @map("confirmed_by_participant")
+  confirmedByAdmin       Boolean       @default(false) @map("confirmed_by_admin")
+  status                 PaymentStatus @default(PENDIENTE)
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+
+  number Number @relation(fields: [idNumber], references: [idNumber], onDelete: Restrict)
+
+  evidences Evidence[]
+  disputes  Dispute[]
+
+  @@index([idNumber])
+  @@map("payment")
+}
+
+// -----------------------------------------------------------------------------
+// Payout  (SIN deletedAt)
+// -----------------------------------------------------------------------------
+model Payout {
+  idPayout             Int          @id @default(autoincrement()) @map("id_payout")
+  idNumber             Int          @map("id_number")
+  transferAmount       Decimal      @default(0) @map("transfer_amount") @db.Decimal(12, 2)
+  cashAmount           Decimal      @default(0) @map("cash_amount") @db.Decimal(12, 2)
+  totalAmount          Decimal      @map("total_amount") @db.Decimal(12, 2)
+  confirmedByAdmin     Boolean      @default(false) @map("confirmed_by_admin")
+  confirmedByRecipient Boolean      @default(false) @map("confirmed_by_recipient")
+  status               PayoutStatus @default(PENDIENTE)
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  number Number @relation(fields: [idNumber], references: [idNumber], onDelete: Restrict)
+
+  evidences Evidence[]
+  disputes  Dispute[]
+
+  @@index([idNumber])
+  @@map("payout")
+}
+
+// -----------------------------------------------------------------------------
+// Evidence  (SIN deletedAt)
+// CHECK (exactamente uno de id_payment / id_payout) -> ver SQL al final.
+// -----------------------------------------------------------------------------
+model Evidence {
+  idEvidence Int      @id @default(autoincrement()) @map("id_evidence")
+  idPayment  Int?     @map("id_payment")
+  idPayout   Int?     @map("id_payout")
+  fileUrl    String   @map("file_url") @db.VarChar(500) // Cloudinary / Firebase Storage
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  payment Payment? @relation(fields: [idPayment], references: [idPayment], onDelete: Restrict)
+  payout  Payout?  @relation(fields: [idPayout], references: [idPayout], onDelete: Restrict)
+
+  @@index([idPayment])
+  @@index([idPayout])
+  @@map("evidence")
+}
+
+// -----------------------------------------------------------------------------
+// Notification
+// -----------------------------------------------------------------------------
+model Notification {
+  idNotification Int      @id @default(autoincrement()) @map("id_notification")
+  idUser         Int      @map("id_user")
+  idTanda        Int?     @map("id_tanda")
+  type           String   @db.VarChar(50) // recordatorio, confirmacion, turno_proximo, ...
+  message        String   @db.Text
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user  User   @relation(fields: [idUser], references: [idUser])
+  tanda Tanda? @relation(fields: [idTanda], references: [idTanda])
+
+  @@index([idUser, isRead])
+  @@index([idTanda])
+  @@map("notification")
+}
+
+// -----------------------------------------------------------------------------
+// Dispute  (sin deletedAt; tiene resolvedAt)
+// -----------------------------------------------------------------------------
+model Dispute {
+  idDispute       Int           @id @default(autoincrement()) @map("id_dispute")
+  idTanda         Int           @map("id_tanda")
+  idReporter      Int           @map("id_reporter")
+  idResolver      Int?          @map("id_resolver") // Administrador Global
+  reason          String        @db.Text
+  status          DisputeStatus @default(ABIERTA)
+  resolutionNotes String?       @map("resolution_notes") @db.Text
+  idPayment       Int?          @map("id_payment")
+  idPayout        Int?          @map("id_payout")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  resolvedAt      DateTime?     @map("resolved_at")
+
+  tanda    Tanda    @relation(fields: [idTanda], references: [idTanda])
+  reporter User     @relation("DisputeReporter", fields: [idReporter], references: [idUser])
+  resolver User?    @relation("DisputeResolver", fields: [idResolver], references: [idUser])
+  payment  Payment? @relation(fields: [idPayment], references: [idPayment], onDelete: Restrict)
+  payout   Payout?  @relation(fields: [idPayout], references: [idPayout], onDelete: Restrict)
+
+  @@index([idTanda])
+  @@index([idReporter])
+  @@index([idResolver])
+  @@index([idPayment])
+  @@index([idPayout])
+  @@index([status])
+  @@map("dispute")
+}
+
+// -----------------------------------------------------------------------------
+// AuditLog  (SIN deletedAt, solo createdAt: inmutable)
+// entity_type + entity_id es referencia polimórfica (sin FK a propósito)
+// -----------------------------------------------------------------------------
+model AuditLog {
+  idLog       Int      @id @default(autoincrement()) @map("id_log")
+  idUser      Int      @map("id_user")
+  actionType  String   @map("action_type") @db.VarChar(100)
+  entityType  String   @map("entity_type") @db.VarChar(100)
+  entityId    Int      @map("entity_id")
+  description String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [idUser], references: [idUser])
+
+  @@index([idUser])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// -----------------------------------------------------------------------------
+// PlatformConfig
+// -----------------------------------------------------------------------------
+model PlatformConfig {
+  idConfig             Int      @id @default(autoincrement()) @map("id_config")
+  maxUsersPerTanda     Int      @map("max_users_per_tanda")
+  maxActiveTandasPerUser Int    @map("max_active_tandas_per_user")
+  maxGraceDays         Int      @map("max_grace_days")
+  idUpdatedBy          Int      @map("id_updated_by")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  updatedBy User @relation(fields: [idUpdatedBy], references: [idUser])
+
+  @@index([idUpdatedBy])
+  @@map("platform_config")
+}
+
+// =============================================================================
+// SQL MANUAL PARA LA MIGRACIÓN (Prisma no soporta CHECK)
+//
+// 1) npx prisma migrate dev --create-only --name init
+// 2) Abrir prisma/migrations/<fecha>_init/migration.sql y agregar AL FINAL:
+//
+//    ALTER TABLE "evidence"
+//      ADD CONSTRAINT "evidence_exactly_one_parent_chk"
+//      CHECK (num_nonnulls("id_payment", "id_payout") = 1);
+//
+// 3) npx prisma migrate dev
+// =============================================================================
