@@ -49,3 +49,6 @@ Thumbs.db
 # Temporary and backup files
 *.bak
 *.tmp
+
+
+src/generated/
