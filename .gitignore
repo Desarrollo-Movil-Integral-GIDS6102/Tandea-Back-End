@@ -1,3 +1,9 @@
+.env
+node_modules/
+build/
+dist/
+npm-debug.log*
+
 # compiled output
 /dist
 /node_modules
