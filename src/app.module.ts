@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
 import { PagoModule } from './pagos/pago.module';
+import { AuthModule } from './auth/auth.module';
 
 /**
  * AppModule — Módulo raíz del Monolito Modular.
@@ -11,6 +12,7 @@ import { PagoModule } from './pagos/pago.module';
 @Module({
   imports: [
     DatabaseModule,
+    AuthModule,
     PagoModule,
     // TandaModule,
     // ParticipanteModule,
