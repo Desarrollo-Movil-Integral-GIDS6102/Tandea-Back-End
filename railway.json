@@ -5,7 +5,8 @@
   },
   "deploy": {
     "startCommand": "npm run start:prod",
-    "healthcheckPath": "/api/v1/health",
+    "healthcheckPath": "/health",
     "preDeployCommand": "npm run db:migrate"
   }
 }
+
