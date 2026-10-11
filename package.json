@@ -26,8 +26,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/database/seed.ts",
-    "db:studio": "drizzle-kit studio",
-    "postinstall": "prisma skills sync || exit 0"
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

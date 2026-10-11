@@ -17,7 +17,7 @@ async function bootstrap() {
   app.useGlobalFilters(new ZodValidationExceptionFilter());
 
   // ── Prefijo global de la API ──────────────────────────────────────────────
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
 
   // ── CORS ──────────────────────────────────────────────────────────────────
   const corsOrigin = process.env.CORS_ORIGIN ?? '*';
