@@ -11,12 +11,10 @@ export class AppController {
   }
 
   @Get('health')
-  getHealth() {
+  getHealth(): { status: string; timestamp: string } {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      service: 'tandea-backend',
-      environment: process.env.NODE_ENV ?? 'development',
     };
   }
 }

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
@@ -19,12 +20,13 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1', { exclude: ['health'] });
 
   // ── CORS ──────────────────────────────────────────────────────────────────
+  const corsOrigin = process.env.CORS_ORIGIN ?? '*';
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? '*',
+    origin: corsOrigin === '*' ? true : corsOrigin,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
   });
 
-  const port = process.env.PORT ?? 3000;
+  const port = Number(process.env.PORT) || 3000;
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 Tandea API corriendo en: http://localhost:${port}/api/v1`);
