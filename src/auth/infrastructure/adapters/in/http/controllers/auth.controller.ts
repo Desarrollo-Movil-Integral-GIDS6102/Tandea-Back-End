@@ -6,6 +6,8 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
   Inject,
 } from '@nestjs/common';
 import {
@@ -13,6 +15,10 @@ import {
   zLoginResponseDto,
   type LoginResponseDto,
 } from '../../../../../application/dtos/login.dto';
+import {
+  RegisterDto,
+  type RegisterResponseDto,
+} from '../../../../../application/dtos/register.dto';
 import {
   LOGIN_USE_CASE_PORT,
   type LoginUseCasePort,
@@ -29,6 +35,23 @@ export class AuthController {
     @Inject(LOGIN_USE_CASE_PORT)
     private readonly authService: LoginUseCasePort,
   ) {}
+
+  /**
+   * POST /api/v1/auth/register
+   * Registra un nuevo usuario con contraseña cifrada (bcrypt 10 rounds).
+   * - Valida con RegisterDto (class-validator: @IsEmail, @MinLength(8)).
+   * - Asigna siempre el rol 'usuario'.
+   * - Retorna 409 si el correo ya existe.
+   * - NUNCA devuelve password_hash.
+   */
+  @Post('register')
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  @HttpCode(HttpStatus.CREATED)
+  async register(
+    @Body() registerDto: RegisterDto,
+  ): Promise<RegisterResponseDto> {
+    return this.authService.register(registerDto);
+  }
 
   /**
    * POST /api/v1/auth/login

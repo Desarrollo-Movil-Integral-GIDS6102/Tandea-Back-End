@@ -1,7 +1,10 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, ConflictException } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
-import { AuthUserRepositoryPort } from '../../../../domain/ports/out/auth-user-repository.port';
+import {
+  AuthUserRepositoryPort,
+  CreateUserData,
+} from '../../../../domain/ports/out/auth-user-repository.port';
 import { AuthUserEntity } from '../../../../domain/entities/auth-user.entity';
 import { userTable, roleTable } from '../../../../../database/tandea.schema';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
@@ -24,6 +27,8 @@ export class DrizzleAuthUserRepository implements AuthUserRepositoryPort {
         idRole: userTable.idRole,
         role: roleTable.nameRole,
         active: userTable.active,
+        age: userTable.age,
+        gender: userTable.gender,
       })
       .from(userTable)
       .innerJoin(roleTable, eq(userTable.idRole, roleTable.idRole))
@@ -44,6 +49,8 @@ export class DrizzleAuthUserRepository implements AuthUserRepositoryPort {
       row.idRole,
       row.role,
       row.active,
+      row.age,
+      row.gender,
     );
   }
 
@@ -58,6 +65,8 @@ export class DrizzleAuthUserRepository implements AuthUserRepositoryPort {
         idRole: userTable.idRole,
         role: roleTable.nameRole,
         active: userTable.active,
+        age: userTable.age,
+        gender: userTable.gender,
       })
       .from(userTable)
       .innerJoin(roleTable, eq(userTable.idRole, roleTable.idRole))
@@ -78,6 +87,75 @@ export class DrizzleAuthUserRepository implements AuthUserRepositoryPort {
       row.idRole,
       row.role,
       row.active,
+      row.age,
+      row.gender,
     );
+  }
+
+  async findRoleByName(
+    nameRole: string,
+  ): Promise<{ idRole: number; nameRole: string } | null> {
+    const rows = await this.db
+      .select({
+        idRole: roleTable.idRole,
+        nameRole: roleTable.nameRole,
+      })
+      .from(roleTable)
+      .where(eq(roleTable.nameRole, nameRole))
+      .limit(1);
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    return rows[0];
+  }
+
+  async createUser(data: CreateUserData): Promise<AuthUserEntity> {
+    try {
+      const [inserted] = await this.db
+        .insert(userTable)
+        .values({
+          email: data.email,
+          passwordHash: data.passwordHash,
+          name: data.name,
+          lastName: data.lastName,
+          idRole: data.idRole,
+          age: data.age,
+          gender: data.gender,
+          active: data.active ?? true,
+        })
+        .returning({
+          idUser: userTable.idUser,
+          email: userTable.email,
+          passwordHash: userTable.passwordHash,
+          name: userTable.name,
+          lastName: userTable.lastName,
+          idRole: userTable.idRole,
+          active: userTable.active,
+          age: userTable.age,
+          gender: userTable.gender,
+        });
+
+      return new AuthUserEntity(
+        inserted.idUser,
+        inserted.email,
+        inserted.passwordHash,
+        inserted.name,
+        inserted.lastName,
+        inserted.idRole,
+        'usuario',
+        inserted.active,
+        inserted.age,
+        inserted.gender,
+      );
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        throw new ConflictException(
+          'El correo electrónico ya está registrado',
+        );
+      }
+      throw error;
+    }
   }
 }
