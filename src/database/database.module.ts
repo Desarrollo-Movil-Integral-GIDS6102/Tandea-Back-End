@@ -15,8 +15,16 @@ import { DATABASE_TOKEN } from '../common/tokens';
     {
       provide: DATABASE_TOKEN,
       useFactory: () => {
+        const connectionString = process.env.DATABASE_URL;
+        const isProduction = process.env.NODE_ENV === 'production';
+        const useSSL =
+          isProduction ||
+          process.env.DATABASE_SSL === 'true' ||
+          connectionString?.includes('sslmode=require');
+
         const pool = new Pool({
-          connectionString: process.env.DATABASE_URL,
+          connectionString,
+          ssl: useSSL ? { rejectUnauthorized: false } : false,
         });
 
         return drizzle(pool);
