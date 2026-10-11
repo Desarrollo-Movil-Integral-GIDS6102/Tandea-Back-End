@@ -20,10 +20,38 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1', { exclude: ['health'] });
 
   // ── CORS ──────────────────────────────────────────────────────────────────
-  const corsOrigin = process.env.CORS_ORIGIN ?? '*';
+  const corsOriginEnv = process.env.CORS_ORIGIN ?? '*';
   app.enableCors({
-    origin: corsOrigin === '*' ? true : corsOrigin,
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+    origin: (origin, callback) => {
+      // Permitir peticiones sin encabezado Origin (móvil nativo, curl, postman)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Permitir comodín '*', entorno de desarrollo o cualquier puerto localhost/127.0.0.1
+      if (
+        corsOriginEnv === '*' ||
+        process.env.NODE_ENV !== 'production' ||
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      ) {
+        return callback(null, true);
+      }
+
+      const allowedOrigins = corsOriginEnv.split(',').map((o) => o.trim());
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      callback(new Error('Bloqueado por política de CORS'), false);
+    },
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'X-Requested-With',
+    ],
+    credentials: true,
   });
 
   const port = Number(process.env.PORT) || 3000;
