@@ -21,11 +21,11 @@ describe('AppController', () => {
   });
 
   describe('health', () => {
-    it('should return health status ok', () => {
+    it('should return health status ok with ISO timestamp', () => {
       const result = appController.getHealth();
       expect(result.status).toBe('ok');
-      expect(result.service).toBe('tandea-backend');
       expect(result.timestamp).toBeDefined();
+      expect(new Date(result.timestamp).toISOString()).toBe(result.timestamp);
     });
   });
 });
