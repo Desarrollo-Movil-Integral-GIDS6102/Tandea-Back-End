@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   UnauthorizedException,
   ForbiddenException,
+  ConflictException,
   ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -9,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from '../src/auth/application/services/auth.service';
 import { AuthUserEntity } from '../src/auth/domain/entities/auth-user.entity';
 import { AuthUserRepositoryPort } from '../src/auth/domain/ports/out/auth-user-repository.port';
+import { AuthController } from '../src/auth/infrastructure/adapters/in/http/controllers/auth.controller';
 import { RolesGuard } from '../src/auth/infrastructure/adapters/in/http/guards/roles.guard';
 import { JwtStrategy } from '../src/auth/infrastructure/adapters/in/http/strategies/jwt.strategy';
 
@@ -21,6 +23,8 @@ describe('[BE-AUTH] Servicio de Autenticación y Login', () => {
     mockUserRepo = {
       findByEmail: vi.fn(),
       findById: vi.fn(),
+      findRoleByName: vi.fn(),
+      createUser: vi.fn(),
     };
 
     mockJwtService = {
@@ -126,6 +130,142 @@ describe('[BE-AUTH] Servicio de Autenticación y Login', () => {
     expect(result.access_token).toBe('mock.jwt.token');
     expect(result.user.idUser).toBe(42);
     expect(result.user.role).toBe('admin_global');
+  });
+
+  it('debe registrar un usuario exitosamente, hasheando password y generando token JWT', async () => {
+    const findByEmailSpy = vi.spyOn(mockUserRepo, 'findByEmail').mockResolvedValue(null);
+    vi.spyOn(mockUserRepo, 'findRoleByName').mockResolvedValue({
+      idRole: 1,
+      nameRole: 'usuario',
+    });
+
+    const createdUser = new AuthUserEntity(
+      10,
+      'nuevo@tandea.com',
+      'hashed_password',
+      'Carlos',
+      'Santana',
+      1,
+      'usuario',
+      true,
+      30,
+      'M',
+    );
+    const createUserSpy = vi.spyOn(mockUserRepo, 'createUser').mockResolvedValue(createdUser);
+
+    const result = await authService.register({
+      email: 'nuevo@tandea.com',
+      password: 'Password123!',
+      name: 'Carlos',
+      lastName: 'Santana',
+      age: 30,
+      gender: 'M',
+    });
+
+    expect(findByEmailSpy).toHaveBeenCalledWith('nuevo@tandea.com');
+    expect(createUserSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'nuevo@tandea.com',
+        name: 'Carlos',
+        lastName: 'Santana',
+        age: 30,
+        gender: 'M',
+        idRole: 1,
+      }),
+    );
+    expect(mockJwtService.sign).toHaveBeenCalledWith({
+      sub: 10,
+      email: 'nuevo@tandea.com',
+      role: 'usuario',
+    });
+    expect(result.access_token).toBe('mock.jwt.token');
+    expect(result.user.idUser).toBe(10);
+    expect(result.user.email).toBe('nuevo@tandea.com');
+    expect(result.user.name).toBe('Carlos');
+    expect(result.user.lastName).toBe('Santana');
+    expect(result.user.role).toBe('usuario');
+    expect(result.user.age).toBe(30);
+    expect(result.user.gender).toBe('M');
+  });
+
+  it('debe lanzar ConflictException (409) al registrar si el correo ya existe', async () => {
+    const existingUser = new AuthUserEntity(
+      5,
+      'existente@tandea.com',
+      'hash',
+      'Juan',
+      'Perez',
+      1,
+      'usuario',
+      true,
+    );
+    vi.spyOn(mockUserRepo, 'findByEmail').mockResolvedValue(existingUser);
+
+    await expect(
+      authService.register({
+        email: 'existente@tandea.com',
+        password: 'Password123!',
+        name: 'Otro',
+        lastName: 'Usuario',
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+});
+
+describe('[BE-AUTH] AuthController - Registro', () => {
+  let authController: AuthController;
+  let mockLoginPort: any;
+  let mockRegisterPort: any;
+
+  beforeEach(() => {
+    mockLoginPort = {
+      validateUser: vi.fn(),
+      login: vi.fn(),
+    };
+    mockRegisterPort = {
+      register: vi.fn(),
+    };
+    authController = new AuthController(mockLoginPort, mockRegisterPort);
+  });
+
+  it('debe registrar usuario con DTO válido a través de POST /register', async () => {
+    mockRegisterPort.register.mockResolvedValue({
+      access_token: 'jwt.mock.token',
+      user: {
+        idUser: 1,
+        email: 'nuevo@ejemplo.com',
+        name: 'Juan',
+        lastName: 'Pérez',
+        role: 'usuario',
+        age: 28,
+        gender: 'M',
+      },
+    });
+
+    const body = {
+      email: 'nuevo@ejemplo.com',
+      password: 'PasswordSeguro123!',
+      name: 'Juan',
+      lastName: 'Pérez',
+      age: 28,
+      gender: 'M',
+    };
+
+    const result = await authController.register(body);
+    expect(result.access_token).toBe('jwt.mock.token');
+    expect(result.user.idUser).toBe(1);
+    expect(result.user.email).toBe('nuevo@ejemplo.com');
+  });
+
+  it('debe rechazar registro con correo inválido con ZodError', async () => {
+    const invalidBody = {
+      email: 'no-es-correo',
+      password: '123',
+      name: '',
+      lastName: '',
+    };
+
+    await expect(authController.register(invalidBody)).rejects.toThrow();
   });
 });
 

@@ -269,6 +269,72 @@ npm run db:studio      # Abre la interfaz visual de Drizzle Studio en el navegad
 
 Todas las rutas tienen el prefijo global: **`/api/v1`**.
 
+### Módulo: Autenticación (`/api/v1/auth`)
+
+#### 1. Registrar Usuario
+* **Método:** `POST`
+* **Ruta:** `/api/v1/auth/register`
+* **Estado Exitoso:** `201 Created`
+* **Cuerpo de la Petición (`Content-Type: application/json`):**
+```json
+{
+  "email": "nuevo_usuario@ejemplo.com",
+  "password": "PasswordSeguro123!",
+  "name": "Juan",
+  "lastName": "Pérez",
+  "age": 28,
+  "gender": "M"
+}
+```
+* **Respuesta (`201 Created`):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "idUser": 1,
+    "email": "nuevo_usuario@ejemplo.com",
+    "name": "Juan",
+    "lastName": "Pérez",
+    "role": "usuario",
+    "age": 28,
+    "gender": "M"
+  }
+}
+```
+
+#### 2. Iniciar Sesión (Login)
+* **Método:** `POST`
+* **Ruta:** `/api/v1/auth/login`
+* **Estado Exitoso:** `200 OK`
+* **Cuerpo de la Petición:**
+```json
+{
+  "email": "nuevo_usuario@ejemplo.com",
+  "password": "PasswordSeguro123!"
+}
+```
+* **Respuesta (`200 OK`):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "idUser": 1,
+    "email": "nuevo_usuario@ejemplo.com",
+    "name": "Juan",
+    "lastName": "Pérez",
+    "role": "usuario"
+  }
+}
+```
+
+#### 3. Perfil del Usuario Autenticado
+* **Método:** `GET`
+* **Ruta:** `/api/v1/auth/profile`
+* **Cabecera requerida:** `Authorization: Bearer <token>`
+* **Estado Exitoso:** `200 OK`
+
+---
+
 ### Módulo: Pagos (`/api/v1/pagos`)
 
 #### 1. Registrar Pago
