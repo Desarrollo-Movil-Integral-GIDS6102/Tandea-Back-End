@@ -8,5 +8,7 @@ export class AuthUserEntity {
     public readonly idRole: number,
     public readonly role: string,
     public readonly active: boolean,
+    public readonly age?: number | null,
+    public readonly gender?: string | null,
   ) {}
 }
