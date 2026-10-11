@@ -9,6 +9,7 @@ import { AuthController } from './infrastructure/adapters/in/http/controllers/au
 // Services & Ports
 import { AuthService } from './application/services/auth.service';
 import { LOGIN_USE_CASE_PORT } from './domain/ports/in/login-use-case.port';
+import { REGISTER_USE_CASE_PORT } from './domain/ports/in/register-use-case.port';
 import { AUTH_USER_REPOSITORY_PORT } from './domain/ports/out/auth-user-repository.port';
 
 // Repositories (Drizzle)
@@ -42,6 +43,10 @@ import { TandaMemberGuard } from './infrastructure/adapters/in/http/guards/tanda
       provide: LOGIN_USE_CASE_PORT,
       useClass: AuthService,
     },
+    {
+      provide: REGISTER_USE_CASE_PORT,
+      useClass: AuthService,
+    },
     AuthService,
     LocalStrategy,
     JwtStrategy,
@@ -53,6 +58,7 @@ import { TandaMemberGuard } from './infrastructure/adapters/in/http/guards/tanda
   exports: [
     AuthService,
     LOGIN_USE_CASE_PORT,
+    REGISTER_USE_CASE_PORT,
     JwtAuthGuard,
     RolesGuard,
     TandaMemberGuard,

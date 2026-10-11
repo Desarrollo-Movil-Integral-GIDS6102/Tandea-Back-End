@@ -3,6 +3,7 @@ import {
   Inject,
   UnauthorizedException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -11,13 +12,18 @@ import {
   type LoginResult,
 } from '../../domain/ports/in/login-use-case.port';
 import {
+  type RegisterUseCasePort,
+  type RegisterCommand,
+  type RegisterResult,
+} from '../../domain/ports/in/register-use-case.port';
+import {
   AUTH_USER_REPOSITORY_PORT,
   type AuthUserRepositoryPort,
 } from '../../domain/ports/out/auth-user-repository.port';
 import { AuthUserEntity } from '../../domain/entities/auth-user.entity';
 
 @Injectable()
-export class AuthService implements LoginUseCasePort {
+export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
   constructor(
     @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: AuthUserRepositoryPort,
@@ -71,6 +77,60 @@ export class AuthService implements LoginUseCasePort {
         name: user.name,
         lastName: user.lastName,
         role: user.role,
+      },
+    };
+  }
+
+  /**
+   * Registra un nuevo usuario con rol por defecto 'usuario'.
+   * 1. Verifica si el email ya existe (409 ConflictException).
+   * 2. Hashea la contraseña con bcrypt (10 rondas de salt).
+   * 3. Asigna el rol 'usuario'.
+   * 4. Persiste en la base de datos mediante Drizzle ORM.
+   * 5. Emite y retorna el token JWT y los datos del nuevo usuario.
+   */
+  async register(command: RegisterCommand): Promise<RegisterResult> {
+    const existing = await this.userRepository.findByEmail(command.email);
+    if (existing) {
+      throw new ConflictException('El correo electrónico ya está registrado');
+    }
+
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(command.password, saltRounds);
+
+    let role = await this.userRepository.findRoleByName('usuario');
+    if (!role) {
+      role = { idRole: 1, nameRole: 'usuario' };
+    }
+
+    const newUser = await this.userRepository.createUser({
+      email: command.email,
+      passwordHash,
+      name: command.name,
+      lastName: command.lastName,
+      age: command.age ?? null,
+      gender: command.gender ?? null,
+      idRole: role.idRole,
+    });
+
+    const payload = {
+      sub: newUser.idUser,
+      email: newUser.email,
+      role: newUser.role,
+    };
+
+    const token = this.jwtService.sign(payload);
+
+    return {
+      access_token: token,
+      user: {
+        idUser: newUser.idUser,
+        email: newUser.email,
+        name: newUser.name,
+        lastName: newUser.lastName,
+        role: newUser.role,
+        age: newUser.age ?? null,
+        gender: newUser.gender ?? null,
       },
     };
   }
