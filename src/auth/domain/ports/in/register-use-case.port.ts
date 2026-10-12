@@ -1,10 +1,27 @@
-import {
-  RegisterDto,
-  RegisterResponseDto,
-} from '../../../application/dtos/register.dto';
-
 export const REGISTER_USE_CASE_PORT = Symbol('REGISTER_USE_CASE_PORT');
 
+export interface RegisterCommand {
+  email: string;
+  password: string;
+  name: string;
+  lastName: string;
+  age?: number | null;
+  gender?: string | null;
+}
+
+export interface RegisterResult {
+  access_token: string;
+  user: {
+    idUser: number;
+    email: string;
+    name: string;
+    lastName: string;
+    role: string;
+    age?: number | null;
+    gender?: string | null;
+  };
+}
+
 export interface RegisterUseCasePort {
-  register(dto: RegisterDto): Promise<RegisterResponseDto>;
+  register(command: RegisterCommand): Promise<RegisterResult>;
 }

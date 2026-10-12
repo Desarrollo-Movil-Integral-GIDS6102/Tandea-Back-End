@@ -15,6 +15,7 @@ Backend del sistema **Tandea**, una plataforma moderna para la administración y
 8. [Especificación de la API (Endpoints)](#-especificación-de-la-api-endpoints)
 9. [Reglas de Negocio del Dominio](#-reglas-de-negocio-del-dominio)
 10. [Instrucciones Críticas para Asistentes de IA y Desarrolladores](#-instrucciones-críticas-para-asistentes-de-ia-y-desarrolladores)
+11. [Despliegue en Railway](#-despliegue-en-railway)
 
 ---
 
@@ -268,6 +269,72 @@ npm run db:studio      # Abre la interfaz visual de Drizzle Studio en el navegad
 
 Todas las rutas tienen el prefijo global: **`/api/v1`**.
 
+### Módulo: Autenticación (`/api/v1/auth`)
+
+#### 1. Registrar Usuario
+* **Método:** `POST`
+* **Ruta:** `/api/v1/auth/register`
+* **Estado Exitoso:** `201 Created`
+* **Cuerpo de la Petición (`Content-Type: application/json`):**
+```json
+{
+  "email": "nuevo_usuario@ejemplo.com",
+  "password": "PasswordSeguro123!",
+  "name": "Juan",
+  "lastName": "Pérez",
+  "age": 28,
+  "gender": "M"
+}
+```
+* **Respuesta (`201 Created`):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "idUser": 1,
+    "email": "nuevo_usuario@ejemplo.com",
+    "name": "Juan",
+    "lastName": "Pérez",
+    "role": "usuario",
+    "age": 28,
+    "gender": "M"
+  }
+}
+```
+
+#### 2. Iniciar Sesión (Login)
+* **Método:** `POST`
+* **Ruta:** `/api/v1/auth/login`
+* **Estado Exitoso:** `200 OK`
+* **Cuerpo de la Petición:**
+```json
+{
+  "email": "nuevo_usuario@ejemplo.com",
+  "password": "PasswordSeguro123!"
+}
+```
+* **Respuesta (`200 OK`):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "idUser": 1,
+    "email": "nuevo_usuario@ejemplo.com",
+    "name": "Juan",
+    "lastName": "Pérez",
+    "role": "usuario"
+  }
+}
+```
+
+#### 3. Perfil del Usuario Autenticado
+* **Método:** `GET`
+* **Ruta:** `/api/v1/auth/profile`
+* **Cabecera requerida:** `Authorization: Bearer <token>`
+* **Estado Exitoso:** `200 OK`
+
+---
+
 ### Módulo: Pagos (`/api/v1/pagos`)
 
 #### 1. Registrar Pago
@@ -375,3 +442,55 @@ Cuando amplíes o modifiques este proyecto, **DEBES respetar rigurosamente estas
      npm run build
      npm run test
      ```
+
+---
+
+## 🚂 Despliegue en Railway
+
+El proyecto está configurado para desplegarse en [Railway](https://railway.com) mediante el archivo de manifiesto `railway.json`.
+
+### Variables de Entorno Requeridas
+
+Configura las siguientes variables en la sección **Variables** del servicio en Railway:
+
+| Variable | Descripción | Ejemplo / Valor |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | Cadena de conexión a PostgreSQL proporcionada por Railway | `${{Postgres.DATABASE_URL}}` |
+| `DATABASE_SSL` | Habilita SSL en la conexión de base de datos (`false` para red interna privada, `true` para proxy público) | `false` |
+| `PORT` | Puerto HTTP donde escuchará la aplicación (asignado automáticamente por Railway) | `3000` |
+| `NODE_ENV` | Entorno de ejecución | `production` |
+| `CORS_ORIGIN` | Orígenes permitidos (`*` para permitir cualquier origen) | `*` |
+| `JWT_SECRET` | Clave secreta para firmar y validar tokens de autenticación JWT | `tu_clave_secreta_jwt` |
+
+> **Nota sobre SSL en Railway:**
+> - Si el backend y la base de datos están en el mismo proyecto de Railway y se comunican mediante la red interna (`postgres.railway.internal`), **no se requiere SSL** (`DATABASE_SSL=false`).
+> - Si se conecta mediante el dominio público proxy de Railway o una base de datos externa gestionada, debe definirse `DATABASE_SSL=true`.
+
+### Ciclo de Despliegue y Comandos
+
+El archivo `railway.json` orquesta automáticamente el ciclo de vida del despliegue:
+- **Build Command:** `npm run build` (compila la aplicación NestJS en `dist/`).
+- **Pre-Deploy Command:** `npm run db:migrate` (aplica las migraciones pendientes de Drizzle ORM a PostgreSQL antes de que entre en servicio la nueva versión).
+- **Start Command:** `npm run start:prod` (inicia el servidor de producción con `node dist/main.js`).
+- **Healthcheck Path:** `/api/v1/health` (Railway sondea esta ruta para validar que el contenedor esté listo antes de dirigir el tráfico de red).
+
+### Verificación del Health Check
+
+Una vez desplegado el servicio, puedes verificar la disponibilidad del backend mediante HTTPS:
+
+```bash
+# En el entorno desplegado en Railway:
+curl https://<tu-servicio>.up.railway.app/api/v1/health
+
+# En entorno local:
+curl http://localhost:3000/api/v1/health
+```
+
+**Respuesta esperada (HTTP 200 OK):**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-10-11T07:45:00.000Z"
+}
+```
+

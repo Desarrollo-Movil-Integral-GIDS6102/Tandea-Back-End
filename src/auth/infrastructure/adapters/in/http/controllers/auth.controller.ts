@@ -6,8 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  UsePipes,
-  ValidationPipe,
   Inject,
 } from '@nestjs/common';
 import {
@@ -16,13 +14,18 @@ import {
   type LoginResponseDto,
 } from '../../../../../application/dtos/login.dto';
 import {
-  RegisterDto,
+  zRegisterDto,
+  zRegisterResponseDto,
   type RegisterResponseDto,
 } from '../../../../../application/dtos/register.dto';
 import {
   LOGIN_USE_CASE_PORT,
   type LoginUseCasePort,
 } from '../../../../../domain/ports/in/login-use-case.port';
+import {
+  REGISTER_USE_CASE_PORT,
+  type RegisterUseCasePort,
+} from '../../../../../domain/ports/in/register-use-case.port';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -33,24 +36,21 @@ import { AuthenticatedUser } from '../strategies/jwt.strategy';
 export class AuthController {
   constructor(
     @Inject(LOGIN_USE_CASE_PORT)
-    private readonly authService: LoginUseCasePort,
+    private readonly loginService: LoginUseCasePort,
+    @Inject(REGISTER_USE_CASE_PORT)
+    private readonly registerService: RegisterUseCasePort,
   ) {}
 
   /**
    * POST /api/v1/auth/register
-   * Registra un nuevo usuario con contraseña cifrada (bcrypt 10 rounds).
-   * - Valida con RegisterDto (class-validator: @IsEmail, @MinLength(8)).
-   * - Asigna siempre el rol 'usuario'.
-   * - Retorna 409 si el correo ya existe.
-   * - NUNCA devuelve password_hash.
+   * Registra un nuevo usuario, valida campos con Zod, hashea con bcrypt y retorna JWT y datos del usuario.
    */
   @Post('register')
-  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   @HttpCode(HttpStatus.CREATED)
-  async register(
-    @Body() registerDto: RegisterDto,
-  ): Promise<RegisterResponseDto> {
-    return this.authService.register(registerDto);
+  async register(@Body() body: unknown): Promise<RegisterResponseDto> {
+    const dto = zRegisterDto.parse(body);
+    const result = await this.registerService.register(dto);
+    return zRegisterResponseDto.parse(result);
   }
 
   /**
@@ -61,8 +61,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() body: unknown): Promise<LoginResponseDto> {
     const dto = zLoginDto.parse(body);
-    const user = await this.authService.validateUser(dto.email, dto.password);
-    const result = await this.authService.login(user);
+    const user = await this.loginService.validateUser(dto.email, dto.password);
+    const result = await this.loginService.login(user);
     return zLoginResponseDto.parse(result);
   }
 

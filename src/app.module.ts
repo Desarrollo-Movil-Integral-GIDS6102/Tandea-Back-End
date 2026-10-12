@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
 import { PagoModule } from './pagos/pago.module';
 import { AuthModule } from './auth/auth.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 /**
  * AppModule — Módulo raíz del Monolito Modular.
@@ -18,5 +20,7 @@ import { AuthModule } from './auth/auth.module';
     // ParticipanteModule,
     // NotificacionModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
