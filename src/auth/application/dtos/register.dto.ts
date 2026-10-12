@@ -1,47 +1,57 @@
-import { z } from 'zod';
+import {
+  IsEmail,
+  MinLength,
+  IsString,
+  IsOptional,
+  IsInt,
+  Min,
+} from 'class-validator';
 
-export const zRegisterDto = z.object({
-  email: z
-    .string({ required_error: 'El correo electrónico es requerido' })
-    .email('El formato del correo electrónico no es válido')
-    .transform((val) => val.trim().toLowerCase()),
-  password: z
-    .string({ required_error: 'La contraseña es requerida' })
-    .min(6, 'La contraseña debe contener al menos 6 caracteres'),
-  name: z
-    .string({ required_error: 'El nombre es requerido' })
-    .min(1, 'El nombre no puede estar vacío')
-    .transform((val) => val.trim()),
-  lastName: z
-    .string({ required_error: 'El apellido es requerido' })
-    .min(1, 'El apellido no puede estar vacío')
-    .transform((val) => val.trim()),
-  age: z.coerce
-    .number()
-    .int('La edad debe ser un número entero')
-    .positive('La edad debe ser mayor a 0')
-    .optional()
-    .nullable(),
-  gender: z
-    .string()
-    .optional()
-    .nullable()
-    .transform((val) => (val ? val.trim() : null)),
-});
+/**
+ * RegisterDto — DTO de validación para registro de nuevos usuarios en Tandea.
+ *
+ * Reglas de negocio:
+ *  - email: formato válido obligatorio (@IsEmail).
+ *  - password: texto con longitud mínima de 8 caracteres (@MinLength(8)).
+ *  - name / lastName / age / gender: datos opcionales para complementar el perfil.
+ */
+export class RegisterDto {
+  @IsEmail({}, { message: 'El formato del correo electrónico no es válido' })
+  email: string;
 
-export type RegisterDto = z.infer<typeof zRegisterDto>;
+  @IsString({ message: 'La contraseña debe ser una cadena de texto' })
+  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  password: string;
 
-export const zRegisterResponseDto = z.object({
-  access_token: z.string(),
-  user: z.object({
-    idUser: z.number(),
-    email: z.string().email(),
-    name: z.string(),
-    lastName: z.string(),
-    role: z.string(),
-    age: z.number().nullable().optional(),
-    gender: z.string().nullable().optional(),
-  }),
-});
+  @IsString({ message: 'El nombre debe ser una cadena de texto' })
+  @IsOptional()
+  name?: string;
 
-export type RegisterResponseDto = z.infer<typeof zRegisterResponseDto>;
+  @IsString({ message: 'El apellido debe ser una cadena de texto' })
+  @IsOptional()
+  lastName?: string;
+
+  @IsInt({ message: 'La edad debe ser un número entero' })
+  @Min(18, { message: 'Debe ser mayor de edad para participar' })
+  @IsOptional()
+  age?: number;
+
+  @IsString({ message: 'El género debe ser una cadena de texto' })
+  @IsOptional()
+  gender?: string;
+}
+
+/**
+ * RegisterResponseDto — Respuesta segura tras el registro exitoso.
+ * IMPORTANTE: NUNCA debe incluir password_hash ni información sensible.
+ */
+export interface RegisterResponseDto {
+  idUser: number;
+  email: string;
+  name: string;
+  lastName: string;
+  role: string;
+  active: boolean;
+  age?: number | null;
+  gender?: string | null;
+}
