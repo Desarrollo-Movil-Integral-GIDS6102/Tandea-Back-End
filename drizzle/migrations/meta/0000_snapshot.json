@@ -1,0 +1,1533 @@
+{
+  "id": "7138eb37-97bc-43ca-ac5f-9855cb332b6d",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_log": {
+      "name": "audit_log",
+      "schema": "",
+      "columns": {
+        "id_log": {
+          "name": "id_log",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id_user": {
+          "name": "id_user",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_type": {
+          "name": "action_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "audit_log_id_user_idx": {
+          "name": "audit_log_id_user_idx",
+          "columns": [
+            {
+              "expression": "id_user",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_entity_idx": {
+          "name": "audit_log_entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_created_at_idx": {
+          "name": "audit_log_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "audit_log_id_user_user_id_user_fk": {
+          "name": "audit_log_id_user_user_id_user_fk",
+          "tableFrom": "audit_log",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_user"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dispute": {
+      "name": "dispute",
+      "schema": "",
+      "columns": {
+        "id_dispute": {
+          "name": "id_dispute",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id_tanda": {
+          "name": "id_tanda",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_reporter": {
+          "name": "id_reporter",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_resolver": {
+          "name": "id_resolver",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "dispute_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ABIERTA'"
+        },
+        "resolution_notes": {
+          "name": "resolution_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_payment": {
+          "name": "id_payment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_payout": {
+          "name": "id_payout",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "dispute_id_tanda_idx": {
+          "name": "dispute_id_tanda_idx",
+          "columns": [
+            {
+              "expression": "id_tanda",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dispute_id_reporter_idx": {
+          "name": "dispute_id_reporter_idx",
+          "columns": [
+            {
+              "expression": "id_reporter",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dispute_id_resolver_idx": {
+          "name": "dispute_id_resolver_idx",
+          "columns": [
+            {
+              "expression": "id_resolver",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dispute_id_payment_idx": {
+          "name": "dispute_id_payment_idx",
+          "columns": [
+            {
+              "expression": "id_payment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dispute_id_payout_idx": {
+          "name": "dispute_id_payout_idx",
+          "columns": [
+            {
+              "expression": "id_payout",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dispute_status_idx": {
+          "name": "dispute_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dispute_id_tanda_tanda_id_tanda_fk": {
+          "name": "dispute_id_tanda_tanda_id_tanda_fk",
+          "tableFrom": "dispute",
+          "tableTo": "tanda",
+          "columnsFrom": [
+            "id_tanda"
+          ],
+          "columnsTo": [
+            "id_tanda"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dispute_id_reporter_user_id_user_fk": {
+          "name": "dispute_id_reporter_user_id_user_fk",
+          "tableFrom": "dispute",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_reporter"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dispute_id_resolver_user_id_user_fk": {
+          "name": "dispute_id_resolver_user_id_user_fk",
+          "tableFrom": "dispute",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_resolver"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dispute_id_payment_payment_id_payment_fk": {
+          "name": "dispute_id_payment_payment_id_payment_fk",
+          "tableFrom": "dispute",
+          "tableTo": "payment",
+          "columnsFrom": [
+            "id_payment"
+          ],
+          "columnsTo": [
+            "id_payment"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "dispute_id_payout_payout_id_payout_fk": {
+          "name": "dispute_id_payout_payout_id_payout_fk",
+          "tableFrom": "dispute",
+          "tableTo": "payout",
+          "columnsFrom": [
+            "id_payout"
+          ],
+          "columnsTo": [
+            "id_payout"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.evidence": {
+      "name": "evidence",
+      "schema": "",
+      "columns": {
+        "id_evidence": {
+          "name": "id_evidence",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id_payment": {
+          "name": "id_payment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_payout": {
+          "name": "id_payout",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_url": {
+          "name": "file_url",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "evidence_id_payment_idx": {
+          "name": "evidence_id_payment_idx",
+          "columns": [
+            {
+              "expression": "id_payment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "evidence_id_payout_idx": {
+          "name": "evidence_id_payout_idx",
+          "columns": [
+            {
+              "expression": "id_payout",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_id_payment_payment_id_payment_fk": {
+          "name": "evidence_id_payment_payment_id_payment_fk",
+          "tableFrom": "evidence",
+          "tableTo": "payment",
+          "columnsFrom": [
+            "id_payment"
+          ],
+          "columnsTo": [
+            "id_payment"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "evidence_id_payout_payout_id_payout_fk": {
+          "name": "evidence_id_payout_payout_id_payout_fk",
+          "tableFrom": "evidence",
+          "tableTo": "payout",
+          "columnsFrom": [
+            "id_payout"
+          ],
+          "columnsTo": [
+            "id_payout"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "evidence_exactly_one_parent_chk": {
+          "name": "evidence_exactly_one_parent_chk",
+          "value": "num_nonnulls(\"evidence\".\"id_payment\", \"evidence\".\"id_payout\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.notification": {
+      "name": "notification",
+      "schema": "",
+      "columns": {
+        "id_notification": {
+          "name": "id_notification",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id_user": {
+          "name": "id_user",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_tanda": {
+          "name": "id_tanda",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_read": {
+          "name": "is_read",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "notification_user_read_idx": {
+          "name": "notification_user_read_idx",
+          "columns": [
+            {
+              "expression": "id_user",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_read",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notification_id_tanda_idx": {
+          "name": "notification_id_tanda_idx",
+          "columns": [
+            {
+              "expression": "id_tanda",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_id_user_user_id_user_fk": {
+          "name": "notification_id_user_user_id_user_fk",
+          "tableFrom": "notification",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_user"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_id_tanda_tanda_id_tanda_fk": {
+          "name": "notification_id_tanda_tanda_id_tanda_fk",
+          "tableFrom": "notification",
+          "tableTo": "tanda",
+          "columnsFrom": [
+            "id_tanda"
+          ],
+          "columnsTo": [
+            "id_tanda"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.number": {
+      "name": "number",
+      "schema": "",
+      "columns": {
+        "id_number": {
+          "name": "id_number",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "number_value": {
+          "name": "number_value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_user": {
+          "name": "id_user",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_tanda": {
+          "name": "id_tanda",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_dead_number": {
+          "name": "is_dead_number",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "number_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDIENTE'"
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "number_id_user_idx": {
+          "name": "number_id_user_idx",
+          "columns": [
+            {
+              "expression": "id_user",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "number_id_user_user_id_user_fk": {
+          "name": "number_id_user_user_id_user_fk",
+          "tableFrom": "number",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_user"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "number_id_tanda_tanda_id_tanda_fk": {
+          "name": "number_id_tanda_tanda_id_tanda_fk",
+          "tableFrom": "number",
+          "tableTo": "tanda",
+          "columnsFrom": [
+            "id_tanda"
+          ],
+          "columnsTo": [
+            "id_tanda"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "number_tanda_round_value_uq": {
+          "name": "number_tanda_round_value_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id_tanda",
+            "round_number",
+            "number_value"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payment": {
+      "name": "payment",
+      "schema": "",
+      "columns": {
+        "id_payment": {
+          "name": "id_payment",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id_number": {
+          "name": "id_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "transfer_amount": {
+          "name": "transfer_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "cash_amount": {
+          "name": "cash_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "total_amount": {
+          "name": "total_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ocr_detected_amount": {
+          "name": "ocr_detected_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ocr_verified": {
+          "name": "ocr_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "confirmed_by_participant": {
+          "name": "confirmed_by_participant",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "confirmed_by_admin": {
+          "name": "confirmed_by_admin",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "payment_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDIENTE'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payment_id_number_idx": {
+          "name": "payment_id_number_idx",
+          "columns": [
+            {
+              "expression": "id_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_id_number_number_id_number_fk": {
+          "name": "payment_id_number_number_id_number_fk",
+          "tableFrom": "payment",
+          "tableTo": "number",
+          "columnsFrom": [
+            "id_number"
+          ],
+          "columnsTo": [
+            "id_number"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payout": {
+      "name": "payout",
+      "schema": "",
+      "columns": {
+        "id_payout": {
+          "name": "id_payout",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "id_number": {
+          "name": "id_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "transfer_amount": {
+          "name": "transfer_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "cash_amount": {
+          "name": "cash_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "total_amount": {
+          "name": "total_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmed_by_admin": {
+          "name": "confirmed_by_admin",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "confirmed_by_recipient": {
+          "name": "confirmed_by_recipient",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "payout_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDIENTE'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payout_id_number_idx": {
+          "name": "payout_id_number_idx",
+          "columns": [
+            {
+              "expression": "id_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payout_id_number_number_id_number_fk": {
+          "name": "payout_id_number_number_id_number_fk",
+          "tableFrom": "payout",
+          "tableTo": "number",
+          "columnsFrom": [
+            "id_number"
+          ],
+          "columnsTo": [
+            "id_number"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.platform_config": {
+      "name": "platform_config",
+      "schema": "",
+      "columns": {
+        "id_config": {
+          "name": "id_config",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "max_users_per_tanda": {
+          "name": "max_users_per_tanda",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_active_tandas_per_user": {
+          "name": "max_active_tandas_per_user",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_grace_days": {
+          "name": "max_grace_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_updated_by": {
+          "name": "id_updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "platform_config_updated_by_idx": {
+          "name": "platform_config_updated_by_idx",
+          "columns": [
+            {
+              "expression": "id_updated_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "platform_config_id_updated_by_user_id_user_fk": {
+          "name": "platform_config_id_updated_by_user_id_user_fk",
+          "tableFrom": "platform_config",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_updated_by"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.role": {
+      "name": "role",
+      "schema": "",
+      "columns": {
+        "id_role": {
+          "name": "id_role",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name_role": {
+          "name": "name_role",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tanda": {
+      "name": "tanda",
+      "schema": "",
+      "columns": {
+        "id_tanda": {
+          "name": "id_tanda",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contribution_amount": {
+          "name": "contribution_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "num_participants": {
+          "name": "num_participants",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "num_rounds": {
+          "name": "num_rounds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grace_days": {
+          "name": "grace_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "has_dead_number": {
+          "name": "has_dead_number",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "id_tanda_type": {
+          "name": "id_tanda_type",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_admin": {
+          "name": "id_admin",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "tanda_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDIENTE'"
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "invite_code": {
+          "name": "invite_code",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tanda_id_admin_idx": {
+          "name": "tanda_id_admin_idx",
+          "columns": [
+            {
+              "expression": "id_admin",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tanda_id_tanda_type_idx": {
+          "name": "tanda_id_tanda_type_idx",
+          "columns": [
+            {
+              "expression": "id_tanda_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tanda_id_tanda_type_tanda_type_id_tanda_type_fk": {
+          "name": "tanda_id_tanda_type_tanda_type_id_tanda_type_fk",
+          "tableFrom": "tanda",
+          "tableTo": "tanda_type",
+          "columnsFrom": [
+            "id_tanda_type"
+          ],
+          "columnsTo": [
+            "id_tanda_type"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tanda_id_admin_user_id_user_fk": {
+          "name": "tanda_id_admin_user_id_user_fk",
+          "tableFrom": "tanda",
+          "tableTo": "user",
+          "columnsFrom": [
+            "id_admin"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tanda_invite_code_unique": {
+          "name": "tanda_invite_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "invite_code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tanda_type": {
+      "name": "tanda_type",
+      "schema": "",
+      "columns": {
+        "id_tanda_type": {
+          "name": "id_tanda_type",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id_user": {
+          "name": "id_user",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "age": {
+          "name": "age",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_role": {
+          "name": "id_role",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "user_id_role_idx": {
+          "name": "user_id_role_idx",
+          "columns": [
+            {
+              "expression": "id_role",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_id_role_role_id_role_fk": {
+          "name": "user_id_role_role_id_role_fk",
+          "tableFrom": "user",
+          "tableTo": "role",
+          "columnsFrom": [
+            "id_role"
+          ],
+          "columnsTo": [
+            "id_role"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.dispute_status": {
+      "name": "dispute_status",
+      "schema": "public",
+      "values": [
+        "ABIERTA",
+        "EN_REVISION",
+        "RESUELTA",
+        "DESCARTADA"
+      ]
+    },
+    "public.number_status": {
+      "name": "number_status",
+      "schema": "public",
+      "values": [
+        "PENDIENTE",
+        "EN_RIESGO",
+        "ENTREGA_PENDIENTE_CONFIRMACION",
+        "ENTREGADO"
+      ]
+    },
+    "public.payment_status": {
+      "name": "payment_status",
+      "schema": "public",
+      "values": [
+        "PENDIENTE",
+        "CONFIRMADO",
+        "RECHAZADO"
+      ]
+    },
+    "public.payout_status": {
+      "name": "payout_status",
+      "schema": "public",
+      "values": [
+        "PENDIENTE",
+        "CONFIRMADO",
+        "RECHAZADO"
+      ]
+    },
+    "public.tanda_status": {
+      "name": "tanda_status",
+      "schema": "public",
+      "values": [
+        "PENDIENTE",
+        "ACTIVA",
+        "FINALIZADA",
+        "SUSPENDIDA",
+        "CANCELADA"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

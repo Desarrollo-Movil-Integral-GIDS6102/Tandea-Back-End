@@ -1,7 +1,8 @@
+import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
-  schema: './src/**/*.schema.ts',
+  schema: 'src/database/tandea.schema.ts',
   out: './drizzle/migrations',
   dialect: 'postgresql',
   dbCredentials: {
