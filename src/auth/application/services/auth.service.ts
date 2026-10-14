@@ -21,14 +21,20 @@ import {
   type AuthUserRepositoryPort,
 } from '../../domain/ports/out/auth-user-repository.port';
 import { AuthUserEntity } from '../../domain/entities/auth-user.entity';
+import { MAIL_PORT, type MailPort } from '../../../common/ports/out/mail.port';
+import { EmailTemplates } from '../../../common/templates/mail/email-templates';
+
+
 
 @Injectable()
 export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
   constructor(
     @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: AuthUserRepositoryPort,
+    @Inject(MAIL_PORT)
+    private readonly mailService: MailPort,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   /**
    * Valida credenciales de usuario con bcrypt.
@@ -120,6 +126,14 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
     };
 
     const token = this.jwtService.sign(payload);
+
+    const template = EmailTemplates.welcome(newUser.name);
+
+    this.mailService.sendMail({
+      to: newUser.email,
+      subject: template.subject,
+      htmlContent: template.html
+    }).catch(() => { });
 
     return {
       access_token: token,
