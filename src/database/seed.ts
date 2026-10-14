@@ -3,18 +3,14 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
-import { roleTable, userTable, platformConfigTable } from './tandea.schema';
+import { roleTable, userTable, platformConfigTable, tandaTypeTable } from './tandea.schema';
 
 /**
  * Seed script para Tandea (Drizzle ORM + PostgreSQL)
  *
- * Tarea: [BD-SETUP] Agregar CHECK de evidence y seed de roles y Administrador Global
- *
- * Acciones:
- *  1. Inserta los roles 'usuario' y 'admin_global' si no existen.
- *  2. Inserta el Administrador Global con contraseña hasheada (bcrypt, 10 rounds)
- *     obtenida de la variable de entorno ADMIN_PASSWORD (o valor seguro por defecto).
- *  3. Inserta una fila inicial en platform_config referenciando al Administrador Global.
+ * Tareas:
+ *  - [BD-SETUP] Agregar roles y Administrador Global
+ *  - [BD-TANDA] Cargar seed de tanda_type
  */
 export async function runSeed(databaseUrl?: string) {
   const url = databaseUrl || process.env.DATABASE_URL;
@@ -30,6 +26,40 @@ export async function runSeed(databaseUrl?: string) {
   console.log('🌱 Iniciando seed de la base de datos Tandea...');
 
   try {
+    // 0. Tipos de Tanda por defecto
+    const tandaTypesToSeed = [
+      {
+        idTandaType: 1,
+        name: 'Tradicional',
+        description: 'Tanda tradicional comunitaria con aportaciones periódicas fijas',
+      },
+      {
+        idTandaType: 2,
+        name: 'Sorteo',
+        description: 'Tanda con asignación aleatoria de turnos',
+      },
+      {
+        idTandaType: 3,
+        name: 'Solidaria',
+        description: 'Tanda de apoyo mutuo y ahorro programado',
+      },
+    ];
+
+    for (const tt of tandaTypesToSeed) {
+      const existing = await db
+        .select()
+        .from(tandaTypeTable)
+        .where(eq(tandaTypeTable.idTandaType, tt.idTandaType))
+        .limit(1);
+
+      if (existing.length === 0) {
+        await db.insert(tandaTypeTable).values(tt);
+        console.log(`  ✓ Tipo de tanda creado: ${tt.name}`);
+      } else {
+        console.log(`  • Tipo de tanda ya existe: ${tt.name}`);
+      }
+    }
+
     // 1. Roles por defecto
     const rolesToSeed = [
       {
