@@ -31,7 +31,11 @@ describe('[BE-AUTH] Servicio de Autenticación y Login', () => {
       sign: vi.fn().mockReturnValue('mock.jwt.token'),
     };
 
-    authService = new AuthService(mockUserRepo, mockJwtService);
+    const mockMailService: any = {
+      sendMail: vi.fn().mockResolvedValue(true),
+    };
+
+    authService = new AuthService(mockUserRepo, mockMailService, mockJwtService);
   });
 
   it('debe validar credenciales correctamente con bcrypt.compare', async () => {

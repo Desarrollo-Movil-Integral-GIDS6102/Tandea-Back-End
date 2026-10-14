@@ -5,7 +5,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
-import { ZodValidationExceptionFilter } from './common/filters/zod-validation.filter';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -13,8 +13,8 @@ async function bootstrap() {
     new FastifyAdapter({ logger: true }),
   );
 
-  // ── Filtro global para ZodError → 422 ────────────────────────────────────
-  app.useGlobalFilters(new ZodValidationExceptionFilter());
+  // ── Filtro global centralizado para todas las excepciones y validaciones ──
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // ── Prefijo global de la API ──────────────────────────────────────────────
   app.setGlobalPrefix('api/v1');
