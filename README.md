@@ -147,6 +147,40 @@ Tandea-Back-End/
 │   │   │           │   └── pago.mapper.ts  # PagoRow ↔ Pago Entity ↔ PagoResponseDto
 │   │   │           └── drizzle-pago.repository.ts # Implementa PagoRepositoryPort
 │   │   └── pago.module.ts                  # NestJS Module uniendo puertos y adaptadores
+│   ├── tandas/                             # Módulo funcional de Tandas (Arquitectura Hexagonal)
+│   │   ├── domain/                         # 1. NÚCLEO: Dominio puro
+│   │   │   ├── entities/
+│   │   │   │   ├── tanda.entity.ts         # Entidad rica Tanda (validaciones, estados)
+│   │   │   │   └── numero-tanda.entity.ts  # Entidad rica NumeroTanda (asignación atómica AP-02)
+│   │   │   ├── errors/
+│   │   │   │   ├── tanda.errors.ts         # DomainError y PlanTandaInvalidoError
+│   │   │   │   └── numero.errors.ts        # NumeroYaTomadoError, NumeroMuertoNoElegibleError, etc.
+│   │   │   ├── services/
+│   │   │   │   └── calcular-plan.ts        # Cálculo puro de plan financiero y turnos (AP-01)
+│   │   │   └── ports/
+│   │   │       ├── in/
+│   │   │       │   ├── tanda-use-cases.port.ts
+│   │   │       │   ├── create-tanda-use-case.port.ts
+│   │   │       │   └── elegir-numero-use-case.port.ts
+│   │   │       └── out/
+│   │   │           ├── tanda-repository.port.ts
+│   │   │           └── number-repository.port.ts
+│   │   ├── application/                    # 2. APLICACIÓN: Orquestación
+│   │   │   ├── dtos/
+│   │   │   └── services/
+│   │   │       ├── tanda.service.ts
+│   │   │       └── elegir-numero.service.ts
+│   │   ├── infrastructure/                 # 3. INFRAESTRUCTURA: Adaptadores
+│   │   │   └── adapters/
+│   │   │       ├── in/http/
+│   │   │       │   ├── tanda.controller.ts
+│   │   │       │   └── filters/
+│   │   │       │       └── tanda-domain-exception.filter.ts # DomainError ➔ 404/409/400/422
+│   │   │       └── out/database/
+│   │   │           ├── mappers/
+│   │   │           │   └── numero.mapper.ts
+│   │   │           └── drizzle-tanda.repository.ts # Implementa TandaRepositoryPort y NumberRepositoryPort
+│   │   └── tanda.module.ts                 # NestJS Module conectando puertos y adaptadores
 │   ├── app.controller.ts                   # Controlador de salud/bienvenida
 │   ├── app.module.ts                       # Módulo raíz que importa módulos de negocio
 │   └── main.ts                             # Entrada principal de la aplicación Fastify
@@ -256,12 +290,41 @@ npm run test:watch     # Modo interactivo de pruebas en tiempo real
 npm run test:cov       # Genera reporte de cobertura de código
 npm run test:e2e       # Ejecuta las pruebas end-to-end
 
-# Base de Datos (Drizzle Kit)
+# Base de Datos (Drizzle Kit y Seeds)
 npm run db:push        # Sincroniza esquemas directamente a PostgreSQL (útil en dev)
 npm run db:generate    # Genera archivos SQL de migración basados en los schemas
 npm run db:migrate     # Ejecuta las migraciones pendientes en PostgreSQL
+npm run db:seed        # Ejecuta el seed idempotente de tipos de tanda (familiar, laboral, amigos)
 npm run db:studio      # Abre la interfaz visual de Drizzle Studio en el navegador
 ```
+
+### 🧪 Ejecución de Seeds y Pruebas de Integración con Base de Datos Local
+
+> [!WARNING]
+> **REGLA DE SEGURIDAD ESTRICTA:** Está terminantemente **PROHIBIDO** ejecutar seeds, migraciones destructivas o pruebas de integración contra la base de datos de Railway. Los scripts y tests validan automáticamente el host de conexión y abortan si detectan `rlwy.net` o `railway.internal`.
+
+#### 1. Cargar Seed de Tipos de Tanda (`tanda_type`)
+El script `npm run db:seed` es **idempotente** (ejecutarlo múltiples veces no duplica filas). Inserta los tres tipos de tanda base (`familiar`, `laboral`, `amigos`) dentro de una transacción verificando previamente si ya existen:
+
+```bash
+# Requiere que DATABASE_URL apunte a tu PostgreSQL local
+npm run db:seed
+```
+
+#### 2. Correr Pruebas de Integración con `TEST_DATABASE_URL`
+Las pruebas de integración de base de datos (`test/number-unique.e2e-spec.ts` y `test/numero-concurrencia.e2e-spec.ts`) validan la restricción única compuesta `(id_tanda, round_number, number_value)` con código `23505` de PostgreSQL y la asignación atómica bajo concurrencia con `Promise.all`.
+
+Por seguridad, estas pruebas **solo se ejecutan si la variable `TEST_DATABASE_URL` está definida** (con `describe.skipIf`) y siempre contra una base de datos local:
+
+```bash
+# En Windows (PowerShell):
+$env:TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/tandea_dev"
+npm run test:e2e
+
+# En Linux / macOS:
+TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/tandea_dev" npm run test:e2e
+```
+
 
 ---
 
