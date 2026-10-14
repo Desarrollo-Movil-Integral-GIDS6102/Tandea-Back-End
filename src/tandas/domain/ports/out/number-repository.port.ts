@@ -1,4 +1,4 @@
-// src/tandas/domain/ports/out/number-repository.port.ts
+import { NumeroTanda } from '../../entities/numero-tanda.entity';
 
 export interface CreateNumberData {
   idTanda: number;
@@ -27,6 +27,17 @@ export interface NumberRepositoryPort {
   findByUserInTanda(idTanda: number, idUser: number): Promise<NumberRecord[]>;
   countParticipants(idTanda: number): Promise<number>;
   findNumbersByTanda(idTanda: number): Promise<NumberRecord[]>;
+  asignarSiLibre(
+    idTanda: number,
+    roundNumber: number,
+    numberValue: number,
+    idUsuario: number,
+  ): Promise<NumeroTanda>;
+  findByTandaRoundAndValue(
+    idTanda: number,
+    roundNumber: number,
+    numberValue: number,
+  ): Promise<NumeroTanda | null>;
 }
 
 export const NUMBER_REPOSITORY_PORT = Symbol('NUMBER_REPOSITORY_PORT');

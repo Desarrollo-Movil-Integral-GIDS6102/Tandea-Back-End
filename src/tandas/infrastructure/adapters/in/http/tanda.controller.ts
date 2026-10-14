@@ -12,6 +12,7 @@ import {
   HttpStatus,
   ParseIntPipe,
   Inject,
+  UseFilters,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../../../auth/infrastructure/adapters/in/http/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../../auth/infrastructure/adapters/in/http/decorators/current-user.decorator';
@@ -20,6 +21,7 @@ import {
   TANDA_USE_CASES_PORT,
   type TandaUseCasesPort,
 } from '../../../../domain/ports/in/tanda-use-cases.port';
+import { TandaDomainExceptionFilter } from './filters/tanda-domain-exception.filter';
 import { zCreateTanda } from '../../../../application/dtos/create-tanda.dto';
 import { zJoinTanda } from '../../../../application/dtos/join-tanda.dto';
 import {
@@ -30,6 +32,7 @@ import { zQueryTandas } from '../../../../application/dtos/query-tandas.dto';
 
 @Controller('tandas')
 @UseGuards(JwtAuthGuard)
+@UseFilters(TandaDomainExceptionFilter)
 export class TandaController {
   constructor(
     @Inject(TANDA_USE_CASES_PORT)
