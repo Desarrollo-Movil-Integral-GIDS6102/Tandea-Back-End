@@ -1,12 +1,11 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
-import { ZodValidationExceptionFilter } from './common/filters/zod-validation.filter';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -14,27 +13,48 @@ async function bootstrap() {
     new FastifyAdapter({ logger: true }),
   );
 
-  // ── Pipe global para validación con class-validator ───────────────────────
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-    }),
-  );
-
-  // ── Filtro global para ZodError → 422 ────────────────────────────────────
-  app.useGlobalFilters(new ZodValidationExceptionFilter());
+  // ── Filtro global centralizado para todas las excepciones y validaciones ──
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // ── Prefijo global de la API ──────────────────────────────────────────────
   app.setGlobalPrefix('api/v1');
 
   // ── CORS ──────────────────────────────────────────────────────────────────
+  const corsOriginEnv = process.env.CORS_ORIGIN ?? '*';
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? '*',
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+    origin: (origin, callback) => {
+      // Permitir peticiones sin encabezado Origin (móvil nativo, curl, postman)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Permitir comodín '*', entorno de desarrollo o cualquier puerto localhost/127.0.0.1
+      if (
+        corsOriginEnv === '*' ||
+        process.env.NODE_ENV !== 'production' ||
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      ) {
+        return callback(null, true);
+      }
+
+      const allowedOrigins = corsOriginEnv.split(',').map((o) => o.trim());
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      callback(new Error('Bloqueado por política de CORS'), false);
+    },
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'X-Requested-With',
+    ],
+    credentials: true,
   });
 
-  const port = process.env.PORT ?? 3000;
+  const port = Number(process.env.PORT) || 3000;
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 Tandea API corriendo en: http://localhost:${port}/api/v1`);

@@ -7,17 +7,19 @@ export interface CreateUserData {
   passwordHash: string;
   name: string;
   lastName: string;
+  age?: number | null;
+  gender?: string | null;
   idRole: number;
-  age?: number;
-  gender?: string;
-  active?: boolean;
+}
+
+export interface AuthRoleData {
+  idRole: number;
+  nameRole: string;
 }
 
 export interface AuthUserRepositoryPort {
   findByEmail(email: string): Promise<AuthUserEntity | null>;
   findById(idUser: number): Promise<AuthUserEntity | null>;
-  findRoleByName(
-    nameRole: string,
-  ): Promise<{ idRole: number; nameRole: string } | null>;
+  findRoleByName(roleName: string): Promise<AuthRoleData | null>;
   createUser(data: CreateUserData): Promise<AuthUserEntity>;
 }

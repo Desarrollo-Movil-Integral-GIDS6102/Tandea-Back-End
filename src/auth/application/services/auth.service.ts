@@ -13,74 +13,28 @@ import {
 } from '../../domain/ports/in/login-use-case.port';
 import {
   type RegisterUseCasePort,
+  type RegisterCommand,
+  type RegisterResult,
 } from '../../domain/ports/in/register-use-case.port';
 import {
   AUTH_USER_REPOSITORY_PORT,
   type AuthUserRepositoryPort,
 } from '../../domain/ports/out/auth-user-repository.port';
 import { AuthUserEntity } from '../../domain/entities/auth-user.entity';
-import {
-  RegisterDto,
-  RegisterResponseDto,
-} from '../dtos/register.dto';
+import { MAIL_PORT, type MailPort } from '../../../common/ports/out/mail.port';
+import { EmailTemplates } from '../../../common/templates/mail/email-templates';
+
+
 
 @Injectable()
 export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
   constructor(
     @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: AuthUserRepositoryPort,
+    @Inject(MAIL_PORT)
+    private readonly mailService: MailPort,
     private readonly jwtService: JwtService,
-  ) {}
-
-  /**
-   * Registro de nuevo usuario con contraseña cifrada.
-   *
-   * Reglas de negocio:
-   *  1. Verifica que el correo no esté ya registrado (409 Conflict si existe).
-   *  2. Genera el hash de la contraseña usando bcrypt con 10 rounds.
-   *  3. Asigna siempre el rol 'usuario'.
-   *  4. Persiste el usuario en la base de datos.
-   *  5. Retorna los datos del usuario omitiendo estrictamente 'password_hash'.
-   */
-  async register(dto: RegisterDto): Promise<RegisterResponseDto> {
-    const existing = await this.userRepository.findByEmail(dto.email);
-    if (existing) {
-      throw new ConflictException('El correo electrónico ya está registrado');
-    }
-
-    // Hash con bcrypt (10 rounds de salt)
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-
-    // Asignar siempre el rol 'usuario'
-    const roleRecord = await this.userRepository.findRoleByName('usuario');
-    const idRole = roleRecord?.idRole ?? 1;
-
-    const name = dto.name?.trim() || dto.email.split('@')[0];
-    const lastName = dto.lastName?.trim() || 'Usuario';
-
-    const newUser = await this.userRepository.createUser({
-      email: dto.email,
-      passwordHash,
-      name,
-      lastName,
-      idRole,
-      age: dto.age,
-      gender: dto.gender,
-      active: true,
-    });
-
-    // NUNCA devolver password_hash ni contraseñas
-    return {
-      idUser: newUser.idUser,
-      email: newUser.email,
-      name: newUser.name,
-      lastName: newUser.lastName,
-      role: 'usuario',
-      active: newUser.active,
-      age: newUser.age ?? null,
-      gender: newUser.gender ?? null,
-    };
-  }
+  ) { }
 
   /**
    * Valida credenciales de usuario con bcrypt.
@@ -129,6 +83,68 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
         name: user.name,
         lastName: user.lastName,
         role: user.role,
+      },
+    };
+  }
+
+  /**
+   * Registra un nuevo usuario con rol por defecto 'usuario'.
+   * 1. Verifica si el email ya existe (409 ConflictException).
+   * 2. Hashea la contraseña con bcrypt (10 rondas de salt).
+   * 3. Asigna el rol 'usuario'.
+   * 4. Persiste en la base de datos mediante Drizzle ORM.
+   * 5. Emite y retorna el token JWT y los datos del nuevo usuario.
+   */
+  async register(command: RegisterCommand): Promise<RegisterResult> {
+    const existing = await this.userRepository.findByEmail(command.email);
+    if (existing) {
+      throw new ConflictException('El correo electrónico ya está registrado');
+    }
+
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(command.password, saltRounds);
+
+    let role = await this.userRepository.findRoleByName('usuario');
+    if (!role) {
+      role = { idRole: 1, nameRole: 'usuario' };
+    }
+
+    const newUser = await this.userRepository.createUser({
+      email: command.email,
+      passwordHash,
+      name: command.name,
+      lastName: command.lastName,
+      age: command.age ?? null,
+      gender: command.gender ?? null,
+      idRole: role.idRole,
+    });
+
+    const payload = {
+      sub: newUser.idUser,
+      email: newUser.email,
+      role: newUser.role,
+    };
+
+    const token = this.jwtService.sign(payload);
+
+    const template = EmailTemplates.welcome(newUser.name);
+
+    this.mailService.sendMail({
+      to: newUser.email,
+      subject: template.subject,
+      htmlContent: template.html
+    }).catch(() => { });
+
+    return {
+      access_token: token,
+      user: {
+        idUser: newUser.idUser,
+        email: newUser.email,
+        name: newUser.name,
+        lastName: newUser.lastName,
+        role: newUser.role,
+        age: newUser.age ?? null,
+        gender: newUser.gender ?? null,
       },
     };
   }

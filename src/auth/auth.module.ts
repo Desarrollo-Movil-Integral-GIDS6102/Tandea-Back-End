@@ -22,6 +22,8 @@ import { JwtAuthGuard } from './infrastructure/adapters/in/http/guards/jwt-auth.
 import { RolesGuard } from './infrastructure/adapters/in/http/guards/roles.guard';
 import { LocalAuthGuard } from './infrastructure/adapters/in/http/guards/local-auth.guard';
 import { TandaMemberGuard } from './infrastructure/adapters/in/http/guards/tanda-member.guard';
+import { MAIL_PORT } from '../common/ports/out/mail.port';
+import { BrevoMailAdapter } from '../common/infrastructure/adapters/out/mail/brevo-mail.adapter';
 
 @Module({
   imports: [
@@ -47,6 +49,10 @@ import { TandaMemberGuard } from './infrastructure/adapters/in/http/guards/tanda
       provide: REGISTER_USE_CASE_PORT,
       useClass: AuthService,
     },
+     {
+      provide: MAIL_PORT,
+      useClass: BrevoMailAdapter,
+    },
     AuthService,
     LocalStrategy,
     JwtStrategy,
@@ -59,6 +65,7 @@ import { TandaMemberGuard } from './infrastructure/adapters/in/http/guards/tanda
     AuthService,
     LOGIN_USE_CASE_PORT,
     REGISTER_USE_CASE_PORT,
+    MAIL_PORT,
     JwtAuthGuard,
     RolesGuard,
     TandaMemberGuard,
