@@ -25,7 +25,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx src/database/seed.ts",
+    "db:seed": "tsx src/database/seeds/tanda-type.seed.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
