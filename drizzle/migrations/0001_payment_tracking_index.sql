@@ -1,0 +1,1 @@
+CREATE INDEX "payment_id_number_status_idx" ON "payment" USING btree ("id_number","status");
