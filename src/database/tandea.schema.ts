@@ -229,7 +229,10 @@ export const paymentTable = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('payment_id_number_idx').on(t.idNumber)],
+  (t) => [
+    index('payment_id_number_idx').on(t.idNumber),
+    index('payment_id_number_status_idx').on(t.idNumber, t.status),
+  ],
 );
 
 // -----------------------------------------------------------------------------
