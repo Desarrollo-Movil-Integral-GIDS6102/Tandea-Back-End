@@ -116,9 +116,10 @@ export class TandaService implements TandaUseCasesPort {
   }
 
   async obtenerPorCodigoInvitacion(inviteCode: string): Promise<Tanda> {
-    const tanda = await this.tandaRepository.findByInviteCode(inviteCode);
+    const cleanCode = inviteCode.trim().toUpperCase();
+    const tanda = await this.tandaRepository.findByInviteCode(cleanCode);
     if (!tanda || !tanda.active) {
-      throw new NotFoundException(`No se encontró ninguna tanda activa con el código ${inviteCode}`);
+      throw new NotFoundException(`No se encontró ninguna tanda activa con el código ${cleanCode}`);
     }
     return tanda;
   }
@@ -240,9 +241,10 @@ export class TandaService implements TandaUseCasesPort {
   }
 
   async unirseTanda(command: JoinTandaCommand): Promise<JoinTandaResult> {
-    const tanda = await this.tandaRepository.findByInviteCode(command.inviteCode);
+    const cleanCode = command.inviteCode.trim().toUpperCase();
+    const tanda = await this.tandaRepository.findByInviteCode(cleanCode);
     if (!tanda || !tanda.active) {
-      throw new NotFoundException(`No existe una tanda activa con el código ${command.inviteCode}`);
+      throw new NotFoundException(`No existe una tanda activa con el código ${cleanCode}`);
     }
 
     if (tanda.status !== 'PENDIENTE') {
