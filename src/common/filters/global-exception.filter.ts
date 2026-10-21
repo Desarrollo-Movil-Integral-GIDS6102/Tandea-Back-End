@@ -41,10 +41,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         code: err.code,
       }));
 
+      const errorMessages = details.map((err) => err.message).filter(Boolean);
+      const formattedMessage =
+        errorMessages.length > 0
+          ? errorMessages.join('. ')
+          : 'Error de validación en los datos enviados';
+
       response.status(HttpStatus.UNPROCESSABLE_ENTITY).send({
         statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
         error: 'Unprocessable Entity',
-        message: 'Error de validación: uno o más campos son inválidos o faltan en la petición.',
+        message: formattedMessage,
         details,
         timestamp,
         path,
