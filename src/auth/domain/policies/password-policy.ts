@@ -13,11 +13,11 @@
  *  - No puede ser (ni basarse en) una contraseña común o comprometida conocida.
  *  - No puede contener el nombre, apellido o la parte local del correo del usuario.
  */
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_BYTES = 72;
 
 const SEQUENCE_RUN = 4;
-const MIN_UNIQUE_CHARS = 5;
+const MIN_UNIQUE_CHARS = 4;
 
 export const PASSWORD_MESSAGES = {
   tooShort: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres`,
