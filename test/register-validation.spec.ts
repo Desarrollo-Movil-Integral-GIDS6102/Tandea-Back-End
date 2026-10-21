@@ -117,7 +117,7 @@ describe('[SP-2-Bug] Registro - Validaciones de entrada', () => {
   });
 
   it('rechaza contraseña menor a la longitud mínima', async () => {
-    const password = 'Tr0mpo vErd';
+    const password = 'Tr0mpo ';
     expect(password.length).toBe(PASSWORD_MIN_LENGTH - 1);
     await expectRejected({ ...validBody, password }, 'password');
     expect(getIssues({ ...validBody, password }).map((i) => i.message)).toContain(
@@ -127,7 +127,7 @@ describe('[SP-2-Bug] Registro - Validaciones de entrada', () => {
 
   it('acepta contraseña con exactamente la longitud mínima', () => {
     expect(
-      zRegisterDto.safeParse({ ...validBody, password: 'Tr0mpo vErde' }).success,
+      zRegisterDto.safeParse({ ...validBody, password: 'Tr0mpo v' }).success,
     ).toBe(true);
   });
 
