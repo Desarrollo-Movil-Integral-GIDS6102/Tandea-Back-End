@@ -164,6 +164,11 @@ Permite a un participante incorporarse a una tanda pendiente mediante su código
 ```
 > *Nota*: `selectedNumber` es opcional. Si no se envía, el sistema asigna automáticamente el primer turno disponible entre `1` y `numParticipants`.
 
+#### Validaciones del Código de Invitación (zJoinTanda)
+* `inviteCode`: Obligatorio, cadena de texto.
+* **Rango de longitud:** mín. 3 caracteres, máx. 20 caracteres (compatible con códigos legacy de 8 y 9 caracteres, y estándar de 10 caracteres `TND-XXXXXX`).
+* **Normalización automática:** eliminación de espacios laterales (`trim`) y conversión a mayúsculas para evitar discrepancias por teclados móviles.
+
 #### Reglas de Negocio
 1. La tanda debe encontrarse en estado `'PENDIENTE'`. Si está `ACTIVA`, `FINALIZADA` o `CANCELADA`, responde `400 Bad Request`.
 2. El usuario no puede registrarse dos veces en la misma tanda (responde `409 Conflict`).
@@ -480,3 +485,8 @@ El módulo cuenta con cobertura de pruebas en [test/tanda.spec.ts](file:///c:/Us
 * Edición controlada y rechazo a usuarios no autorizados.
 * Soft delete preservando la integridad referencial.
 * Asignación manual y automática de números con prevención de colisiones.
+* Verificación de contrato del código de invitación en [test/invite-code-contract.spec.ts](file:///c:/Users/brand/Documentos/GIDS6102/Tandea/Tandea-Back-End/test/invite-code-contract.spec.ts):
+  - Formato `TND-XXXXXX` de 10 caracteres y aleatoriedad del generador.
+  - Compatibilidad de entrada para códigos de 8, 9 y 10 caracteres.
+  - Sanitización automática (trim y uppercase).
+  - Rechazo de códigos fuera de rango (< 3 o > 20 caracteres) o tipos inválidos.
