@@ -1,0 +1,811 @@
+{
+  "info": {
+    "_postman_id": "b8d8e52a-9f5b-4c3e-8d2a-71b3e1f5a9b0",
+    "name": "Tandea API - Colección Completa v1",
+    "description": "Colección completa de endpoints de Tandea Back-End (NestJS + Fastify + Drizzle ORM). Incluye Auth, Tandas (CRUD, filtros, paginación, unirse) y Pagos, con scripts de auto-guardado de tokens y variables para pruebas 100% fluidas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token_organizador",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_participante",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin_global",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tandaId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "inviteCode",
+      "value": "TND-EXAMPLE",
+      "type": "string"
+    },
+    {
+      "key": "pagoId",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health & Status",
+      "item": [
+        {
+          "name": "Raíz de la API",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Autenticación (Auth)",
+      "item": [
+        {
+          "name": "1.1 Registrar Organizador (Brandon)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access_token) {",
+                  "    pm.collectionVariables.set('token_organizador', res.access_token);",
+                  "    console.log('Token de Organizador guardado con éxito');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"brandon.organizador@tandea.com\",\n  \"password\": \"Password123!*\",\n  \"name\": \"Brandon\",\n  \"lastName\": \"Hernandez\",\n  \"age\": 24,\n  \"gender\": \"Masculino\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Registrar Participante (Karen)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access_token) {",
+                  "    pm.collectionVariables.set('token_participante', res.access_token);",
+                  "    console.log('Token de Participante guardado con éxito');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"karen.participante@tandea.com\",\n  \"password\": \"Password123!*\",\n  \"name\": \"Karen\",\n  \"lastName\": \"Lopez\",\n  \"age\": 23,\n  \"gender\": \"Femenino\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Login Organizador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access_token) {",
+                  "    pm.collectionVariables.set('token_organizador', res.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"brandon.organizador@tandea.com\",\n  \"password\": \"Password123!*\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.4 Login Participante",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access_token) {",
+                  "    pm.collectionVariables.set('token_participante', res.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"karen.participante@tandea.com\",\n  \"password\": \"Password123!*\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.5 Login Admin Global (Seed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access_token) {",
+                  "    pm.collectionVariables.set('token_admin_global', res.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@tandea.com\",\n  \"password\": \"Admin123!*\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.6 Obtener Perfil Autenticado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "1.7 Verificar Rol Usuario Regular",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/usuario-check",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "usuario-check"]
+            }
+          }
+        },
+        {
+          "name": "1.8 Verificar Rol Admin Global",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin_global}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/admin-check",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "admin-check"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Tandas (CRUD, Filtros, Paginación)",
+      "item": [
+        {
+          "name": "2.1 Crear Tanda Regular (Organizador)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.idTanda) {",
+                  "    pm.collectionVariables.set('tandaId', res.data.idTanda);",
+                  "    pm.collectionVariables.set('inviteCode', res.data.inviteCode);",
+                  "    console.log('Tanda creada:', res.data.idTanda, 'Código:', res.data.inviteCode);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tanda Navideña 2026\",\n  \"description\": \"Ahorro para regalos y cena de fin de año\",\n  \"startDate\": \"2026-11-01\",\n  \"contributionAmount\": 1500.00,\n  \"numParticipants\": 5,\n  \"numRounds\": 1,\n  \"graceDays\": 2,\n  \"hasDeadNumber\": false,\n  \"idTandaType\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tandas",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Crear Tanda con Número Muerto (Respaldo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tanda Vacaciones con Respaldo\",\n  \"description\": \"Tanda protegida con turno de número muerto para cubrir morosos\",\n  \"startDate\": \"2026-12-01\",\n  \"contributionAmount\": 2000.00,\n  \"numParticipants\": 6,\n  \"numRounds\": 1,\n  \"graceDays\": 3,\n  \"hasDeadNumber\": true,\n  \"idTandaType\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tandas",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Consultar Tanda por Código de Invitación",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_participante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas/codigo/{{inviteCode}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas", "codigo", "{{inviteCode}}"]
+            }
+          }
+        },
+        {
+          "name": "2.4 Unirse a Tanda (Eligiendo Turno)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_participante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inviteCode\": \"{{inviteCode}}\",\n  \"selectedNumber\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tandas/unirse",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas", "unirse"]
+            }
+          }
+        },
+        {
+          "name": "2.5 Listar Todas mis Tandas (Dueño + Participante)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas?scope=todos&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"],
+              "query": [
+                {
+                  "key": "scope",
+                  "value": "todos"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.6 Listar Solo Tandas donde soy Dueño (Organizador)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas?scope=dueno&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"],
+              "query": [
+                {
+                  "key": "scope",
+                  "value": "dueno"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.7 Listar Solo Tandas donde soy Participante",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_participante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas?scope=participante&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"],
+              "query": [
+                {
+                  "key": "scope",
+                  "value": "participante"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.8 Filtrar Tandas por Nombre y Ordenar por Monto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas?search=Navideña&sortBy=contributionAmount&sortOrder=desc&page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Navideña"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "contributionAmount"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.9 Filtrar por Rango de Fechas y Estado PENDIENTE",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas?status=PENDIENTE&startDateFrom=2026-10-01&startDateTo=2026-12-31&sortBy=startDate&sortOrder=asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDIENTE"
+                },
+                {
+                  "key": "startDateFrom",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "startDateTo",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "startDate"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.10 Obtener Detalle de Tanda por ID (con Turnos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas/{{tandaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas", "{{tandaId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.11 Actualizar Nombre y Descripción de la Tanda",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tanda Navideña 2026 - Edición Familiar\",\n  \"description\": \"Descripción actualizada con nuevas metas de ahorro\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tandas/{{tandaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas", "{{tandaId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.12 Cambiar Estado de la Tanda (a ACTIVA)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVA\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tandas/{{tandaId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas", "{{tandaId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "2.13 Eliminar Tanda (Soft Delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tandas/{{tandaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tandas", "{{tandaId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Pagos (Payments & Dual Confirmation)",
+      "item": [
+        {
+          "name": "3.1 Crear Pago con Efectivo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('pagoId', res.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_participante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tandaId\": \"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11\",\n  \"participanteId\": \"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22\",\n  \"numeroPago\": 1,\n  \"monto\": 1500.00,\n  \"montoEfectivo\": 1500.00,\n  \"montoTransferencia\": 0.00,\n  \"metodoPago\": \"efectivo\",\n  \"fechaPago\": \"2026-11-05T12:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pagos",
+              "host": ["{{baseUrl}}"],
+              "path": ["pagos"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Crear Pago Híbrido (Efectivo + Transferencia con Comprobante)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('pagoId', res.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_participante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tandaId\": \"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11\",\n  \"participanteId\": \"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22\",\n  \"numeroPago\": 1,\n  \"monto\": 1500.00,\n  \"montoEfectivo\": 500.00,\n  \"montoTransferencia\": 1000.00,\n  \"metodoPago\": \"hibrido\",\n  \"comprobanteUrl\": \"https://storage.googleapis.com/tandea-evidencias/comprobante-1.jpg\",\n  \"fechaPago\": \"2026-11-05T12:30:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pagos",
+              "host": ["{{baseUrl}}"],
+              "path": ["pagos"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Obtener Pago por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/{{pagoId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["pagos", "{{pagoId}}"]
+            }
+          }
+        },
+        {
+          "name": "3.4 Confirmar Pago por Organizador",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_organizador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/{{pagoId}}/confirmar-organizador",
+              "host": ["{{baseUrl}}"],
+              "path": ["pagos", "{{pagoId}}", "confirmar-organizador"]
+            }
+          }
+        },
+        {
+          "name": "3.5 Confirmar Pago por Receptor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_participante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/{{pagoId}}/confirmar-receptor",
+              "host": ["{{baseUrl}}"],
+              "path": ["pagos", "{{pagoId}}", "confirmar-receptor"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
