@@ -185,6 +185,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const msg = exception.message;
       const isDomainRule =
         msg.includes('Una tanda debe tener') ||
+        msg.includes('Una tanda requiere') ||
         msg.includes('El monto de contribución') ||
         msg.includes('Los días de gracia') ||
         msg.includes('Debe haber al menos') ||

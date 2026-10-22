@@ -4,6 +4,7 @@ import { TandaRepositoryPort } from '../src/tandas/domain/ports/out/tanda-reposi
 import { NumberRepositoryPort } from '../src/tandas/domain/ports/out/number-repository.port';
 import { Tanda } from '../src/tandas/domain/entities/tanda.entity';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -97,6 +98,53 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
         isDeadNumber: true,
         status: 'PENDIENTE',
       });
+    });
+
+    it('debe permitir crear una tanda con el mínimo válido de 3 participantes', async () => {
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(null);
+      const createSpy = vi.spyOn(mockTandaRepo, 'create').mockImplementation(async (t) => t);
+
+      const result = await service.crearTanda({
+        name: 'Tanda Mínima 3',
+        startDate: '2026-11-01',
+        contributionAmount: 500,
+        numParticipants: 3,
+        idAdmin: 10,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.numParticipants).toBe(3);
+      expect(createSpy).toHaveBeenCalledOnce();
+    });
+
+    it('debe rechazar con BadRequestException si se intenta crear una tanda con menos de 3 participantes (ej. 2)', async () => {
+      const createSpy = vi.spyOn(mockTandaRepo, 'create');
+      await expect(
+        service.crearTanda({
+          name: 'Tanda Inválida 2',
+          startDate: '2026-11-01',
+          contributionAmount: 500,
+          numParticipants: 2,
+          idAdmin: 10,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(createSpy).not.toHaveBeenCalled();
+    });
+
+    it('debe rechazar con BadRequestException si se intenta crear con 0 participantes', async () => {
+      const createSpy = vi.spyOn(mockTandaRepo, 'create');
+      await expect(
+        service.crearTanda({
+          name: 'Tanda Inválida 0',
+          startDate: '2026-11-01',
+          contributionAmount: 500,
+          numParticipants: 0,
+          idAdmin: 10,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(createSpy).not.toHaveBeenCalled();
     });
   });
 

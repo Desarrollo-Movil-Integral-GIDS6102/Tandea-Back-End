@@ -34,7 +34,7 @@ export const zCreateTanda = z.object({
       invalid_type_error: 'El campo "numParticipants" debe ser un número entero',
     })
     .int('El número de participantes debe ser un número entero')
-    .min(2, 'Debe haber al menos 2 participantes en la tanda')
+    .min(3, 'Una tanda requiere al menos 3 participantes')
     .max(50, 'El número máximo de participantes permitido es 50'),
 
   numRounds: z
