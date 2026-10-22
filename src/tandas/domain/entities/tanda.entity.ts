@@ -30,8 +30,8 @@ export class Tanda {
   }
 
   private validate(): void {
-    if (this.props.numParticipants < 2) {
-      throw new Error('Una tanda debe tener al menos 2 participantes');
+    if (this.props.numParticipants < 3) {
+      throw new Error('Una tanda requiere al menos 3 participantes');
     }
     if (this.props.contributionAmount <= 0) {
       throw new Error('El monto de contribución debe ser mayor a 0');

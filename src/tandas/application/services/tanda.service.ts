@@ -31,7 +31,18 @@ export class TandaService implements TandaUseCasesPort {
   ) {}
 
   async crearTanda(command: CreateTandaCommand): Promise<Tanda> {
-    // 1. Generar código único y verificar colisión en BD
+    // 1. Validar regla de negocio de participantes antes de consultar BD o generar código
+    if (
+      command.numParticipants === undefined ||
+      command.numParticipants === null ||
+      typeof command.numParticipants !== 'number' ||
+      !Number.isInteger(command.numParticipants) ||
+      command.numParticipants < 3
+    ) {
+      throw new BadRequestException('Una tanda requiere al menos 3 participantes');
+    }
+
+    // 2. Generar código único y verificar colisión en BD
     let inviteCode = '';
     let isUnique = false;
     let attempts = 0;
@@ -49,7 +60,7 @@ export class TandaService implements TandaUseCasesPort {
       throw new ConflictException('No se pudo generar un código único de tanda. Reintente.');
     }
 
-    // 2. Instanciar y persistir entidad
+    // 3. Instanciar y persistir entidad
     const tanda = new Tanda({
       name: command.name,
       description: command.description,
@@ -67,7 +78,7 @@ export class TandaService implements TandaUseCasesPort {
 
     const tandaCreada = await this.tandaRepository.create(tanda);
 
-    // 3. Si tiene número muerto configurado, reservar el turno en la vuelta 1
+    // 4. Si tiene número muerto configurado, reservar el turno en la vuelta 1
     if (tandaCreada.hasDeadNumber && tandaCreada.idTanda) {
       await this.numberRepository.createNumber({
         idTanda: tandaCreada.idTanda,
