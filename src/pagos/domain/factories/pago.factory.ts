@@ -1,5 +1,6 @@
 import { Pago, MetodoPago } from '../entities/Pago';
-import { ReglaNegocioPagoError } from '../errors/pago.errors';
+import { MontoHibridoInvalidoError, ReglaNegocioPagoError } from '../errors/pago.errors';
+import { esMontoMonetarioValido, sumarCentavosExactos, toCentavos } from '../utils/moneda.util';
 
 export interface CrearPagoFactoryDto {
   idPayment?: number;
@@ -27,6 +28,13 @@ export interface CrearPagoFactoryDto {
   numeroPago?: number;
 }
 
+export interface MontosPago {
+  metodoPago: MetodoPago;
+  transferAmount: number;
+  cashAmount: number;
+  totalAmount: number;
+}
+
 /**
  * Fábrica de Dominio: PagoFactory
  *
@@ -36,6 +44,7 @@ export interface CrearPagoFactoryDto {
  *    * Efectivo: 100% efectivo, 0 transferencia, comprobante opcional.
  *    * Transferencia: 100% transferencia, 0 efectivo, comprobante obligatorio.
  *    * Híbrido: efectivo > 0, transferencia > 0, suma == cuota, comprobante obligatorio.
+ *  - Todas las comparaciones de montos se hacen en centavos enteros (nunca con floats).
  *  - NO contiene dependencias de frameworks (@nestjs, etc.).
  */
 export class PagoFactory {
@@ -43,6 +52,60 @@ export class PagoFactory {
    * Crea y valida una instancia de Pago según el método de pago especificado.
    */
   public static crear(dto: CrearPagoFactoryDto): Pago {
+    const { metodoPago, transferAmount, cashAmount, totalAmount } =
+      PagoFactory.validarMontos(dto);
+
+    // Comprobante: obligatorio cuando hay transferencia, opcional en efectivo
+    const rawEvidence = dto.evidenceUrl ?? dto.fileUrl ?? dto.comprobanteUrl ?? null;
+    const cleanEvidence =
+      typeof rawEvidence === 'string' && rawEvidence.trim().length > 0
+        ? rawEvidence.trim()
+        : null;
+
+    if (metodoPago === 'transferencia' && !cleanEvidence) {
+      throw new ReglaNegocioPagoError(
+        'El pago por transferencia requiere un comprobante digital obligatorio (URL de comprobante)',
+      );
+    }
+    if (metodoPago === 'hibrido' && !cleanEvidence) {
+      throw new ReglaNegocioPagoError(
+        'El pago híbrido requiere un comprobante digital obligatorio para respaldar el monto de transferencia',
+      );
+    }
+
+    // Instanciar la entidad Pago con el estado inicial correspondiente
+    const confirmedByParticipant = dto.confirmedByParticipant ?? false;
+    const confirmedByAdmin = dto.confirmedByAdmin ?? false;
+
+    const status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
+      dto.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
+
+    return Pago.create({
+      idPayment: dto.idPayment,
+      id: dto.id,
+      idNumber: dto.idNumber,
+      transferAmount,
+      cashAmount,
+      totalAmount,
+      metodoPago,
+      status,
+      confirmedByParticipant,
+      confirmedByAdmin,
+      evidenceUrl: cleanEvidence,
+      ocrDetectedAmount: dto.ocrDetectedAmount ?? null,
+      ocrVerified: dto.ocrVerified ?? false,
+      fechaPago: dto.fechaPago,
+      tandaId: dto.tandaId,
+      participanteId: dto.participanteId,
+      numeroPago: dto.numeroPago,
+    });
+  }
+
+  /**
+   * Valida idNumber, método y montos (en centavos) sin exigir comprobante.
+   * Permite rechazar montos inválidos antes de subir cualquier archivo.
+   */
+  public static validarMontos(dto: CrearPagoFactoryDto): MontosPago {
     // 1. Validar identificador de número/turno
     if (
       dto.idNumber === undefined ||
@@ -69,11 +132,9 @@ export class PagoFactory {
     const rawTransfer = dto.transferAmount ?? dto.montoTransferencia;
     const rawCash = dto.cashAmount ?? dto.montoEfectivo;
 
-    const rawEvidence = dto.evidenceUrl ?? dto.fileUrl ?? dto.comprobanteUrl ?? null;
-    const cleanEvidence =
-      typeof rawEvidence === 'string' && rawEvidence.trim().length > 0
-        ? rawEvidence.trim()
-        : null;
+    PagoFactory.validarMonto(rawTotal, 'La cuota total');
+    PagoFactory.validarMonto(rawTransfer, 'El monto de transferencia');
+    PagoFactory.validarMonto(rawCash, 'El monto en efectivo');
 
     let finalTransfer = 0;
     let finalCash = 0;
@@ -96,7 +157,7 @@ export class PagoFactory {
         }
 
         if (rawTotal !== undefined && rawCash !== undefined) {
-          if (Math.abs(rawCash - rawTotal) > 0.009) {
+          if (toCentavos(rawCash) !== toCentavos(rawTotal)) {
             throw new ReglaNegocioPagoError(
               `El monto en efectivo (${rawCash}) debe coincidir con la cuota total (${rawTotal})`,
             );
@@ -124,17 +185,11 @@ export class PagoFactory {
         }
 
         if (rawTotal !== undefined && rawTransfer !== undefined) {
-          if (Math.abs(rawTransfer - rawTotal) > 0.009) {
+          if (toCentavos(rawTransfer) !== toCentavos(rawTotal)) {
             throw new ReglaNegocioPagoError(
               `El monto de transferencia (${rawTransfer}) debe coincidir con la cuota total (${rawTotal})`,
             );
           }
-        }
-
-        if (!cleanEvidence) {
-          throw new ReglaNegocioPagoError(
-            'El pago por transferencia requiere un comprobante digital obligatorio (URL de comprobante)',
-          );
         }
 
         finalTransfer = Number(transferAmount.toFixed(2));
@@ -156,22 +211,14 @@ export class PagoFactory {
           );
         }
 
-        const sum = Number((rawTransfer + rawCash).toFixed(2));
+        const sum = (toCentavos(rawTransfer) + toCentavos(rawCash)) / 100;
         if (rawTotal !== undefined) {
-          if (Math.abs(sum - rawTotal) > 0.009) {
-            throw new ReglaNegocioPagoError(
-              `La suma de efectivo (${rawCash}) y transferencia (${rawTransfer}) = ${sum} debe coincidir exactamente con la cuota total (${rawTotal})`,
-            );
+          if (!sumarCentavosExactos(rawCash, rawTransfer, rawTotal)) {
+            throw new MontoHibridoInvalidoError(rawCash, rawTransfer, sum, rawTotal);
           }
           finalTotal = Number(rawTotal.toFixed(2));
         } else {
           finalTotal = sum;
-        }
-
-        if (!cleanEvidence) {
-          throw new ReglaNegocioPagoError(
-            'El pago híbrido requiere un comprobante digital obligatorio para respaldar el monto de transferencia',
-          );
         }
 
         finalTransfer = Number(rawTransfer.toFixed(2));
@@ -180,31 +227,22 @@ export class PagoFactory {
       }
     }
 
-    // 5. Instanciar la entidad Pago con el estado inicial correspondiente
-    const confirmedByParticipant = dto.confirmedByParticipant ?? false;
-    const confirmedByAdmin = dto.confirmedByAdmin ?? false;
-
-    let status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
-      dto.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
-
-    return Pago.create({
-      idPayment: dto.idPayment,
-      id: dto.id,
-      idNumber: dto.idNumber,
+    return {
+      metodoPago: metodoNormalizado,
       transferAmount: finalTransfer,
       cashAmount: finalCash,
       totalAmount: finalTotal,
-      metodoPago: metodoNormalizado,
-      status,
-      confirmedByParticipant,
-      confirmedByAdmin,
-      evidenceUrl: cleanEvidence,
-      ocrDetectedAmount: dto.ocrDetectedAmount ?? null,
-      ocrVerified: dto.ocrVerified ?? false,
-      fechaPago: dto.fechaPago,
-      tandaId: dto.tandaId,
-      participanteId: dto.participanteId,
-      numeroPago: dto.numeroPago,
-    });
+    };
+  }
+
+  /**
+   * Rechaza montos no finitos, negativos o con fracciones de centavo.
+   */
+  private static validarMonto(valor: number | undefined, campo: string): void {
+    if (valor !== undefined && !esMontoMonetarioValido(valor)) {
+      throw new ReglaNegocioPagoError(
+        `${campo} debe ser un número finito no negativo con máximo 2 decimales`,
+      );
+    }
   }
 }

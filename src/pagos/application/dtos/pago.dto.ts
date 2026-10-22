@@ -1,139 +1,99 @@
 import { z } from 'zod';
-import { toCentavos } from '../../domain/utils/moneda.util';
+import { esMontoMonetarioValido } from '../../domain/utils/moneda.util';
 
 // ─────────────────────────────────────────────
 // Enums compartidos
 // ─────────────────────────────────────────────
 
-export const zMetodoPago = z.enum(['efectivo', 'transferencia', 'hibrido']);
-export const zEstadoPago = z.enum([
-  'pendiente',
-  'confirmado_parcial',
-  'confirmado',
-  'rechazado',
-]);
+export const zMetodoPago = z.enum(['efectivo', 'transferencia', 'hibrido'], {
+  errorMap: () => ({
+    message: 'metodoPago debe ser "efectivo", "transferencia" o "hibrido"',
+  }),
+});
+export const zEstadoPago = z.enum(['PENDIENTE', 'CONFIRMADO', 'RECHAZADO']);
 
 // ─────────────────────────────────────────────
-// DTO de ENTRADA — Crear un Pago (Command)
+// Helpers de campos
 // ─────────────────────────────────────────────
 
-export const zPagoCreate = z
+/**
+ * Monto opcional. Acepta número o texto (los campos de multipart llegan como string).
+ * Cadena vacía o ausente → undefined (la cuota real la decide el servicio).
+ */
+const zMontoOpcional = (campo: string) =>
+  z.preprocess(
+    (v) => (v === undefined || v === null || v === '' ? undefined : Number(v)),
+    z
+      .number({ invalid_type_error: `${campo} debe ser un número` })
+      .refine(esMontoMonetarioValido, {
+        message: `${campo} debe ser un número finito, no negativo y con máximo 2 decimales`,
+      })
+      .optional(),
+  );
+
+// ─────────────────────────────────────────────
+// DTO de ENTRADA — Registrar un Pago (AP-03)
+// Campos de texto del multipart/form-data; el archivo viaja en `file`.
+// ─────────────────────────────────────────────
+
+export const zRegistrarPago = z
   .object({
-    tandaId: z.string().uuid({ message: 'tandaId debe ser un UUID válido' }),
-    participanteId: z
-      .string()
-      .uuid({ message: 'participanteId debe ser un UUID válido' }),
-    numeroPago: z
-      .number()
-      .int()
-      .positive({ message: 'El número de pago debe ser un entero positivo' }),
-    monto: z
-      .number()
-      .finite({ message: 'El monto debe ser un número finito' })
-      .positive({ message: 'El monto debe ser mayor a cero' })
-      .multipleOf(0.01, { message: 'El monto no puede tener más de 2 decimales' }),
-    montoEfectivo: z
-      .number({ invalid_type_error: 'El monto en efectivo debe ser un número' })
-      .finite({ message: 'El monto en efectivo debe ser un número finito' })
-      .min(0, { message: 'El monto en efectivo no puede ser negativo' })
-      .multipleOf(0.01, { message: 'El monto en efectivo no puede tener más de 2 decimales' })
-      .default(0),
-    montoTransferencia: z
-      .number({ invalid_type_error: 'El monto de transferencia debe ser un número' })
-      .finite({ message: 'El monto de transferencia debe ser un número finito' })
-      .min(0, { message: 'El monto de transferencia no puede ser negativo' })
-      .multipleOf(0.01, { message: 'El monto de transferencia no puede tener más de 2 decimales' })
-      .default(0),
+    idNumber: z.coerce
+      .number({ invalid_type_error: 'idNumber debe ser un número' })
+      .int({ message: 'idNumber debe ser un entero' })
+      .positive({ message: 'idNumber debe ser un entero positivo' }),
     metodoPago: zMetodoPago,
-    comprobanteUrl: z
-      .string()
-      .url({ message: 'El comprobante debe ser una URL válida' })
-      .nullable()
-      .default(null),
-    fechaPago: z.coerce.date({
-      errorMap: () => ({ message: 'fechaPago debe ser una fecha válida' }),
-    }),
+    transferAmount: zMontoOpcional('transferAmount'),
+    cashAmount: zMontoOpcional('cashAmount'),
   })
   .superRefine((data, ctx) => {
-    // Comparación monetaria exacta en centavos enteros (AP-03)
-    const efectivoCentavos = toCentavos(data.montoEfectivo);
-    const transferenciaCentavos = toCentavos(data.montoTransferencia);
-    const totalCentavos = toCentavos(data.monto);
-    const sumaCentavos = efectivoCentavos + transferenciaCentavos;
-
-
-
-    // Validar que los parciales sumen el total
-    if (sumaCentavos !== totalCentavos) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['monto'],
-        message: `montoEfectivo (${data.montoEfectivo}) + montoTransferencia (${data.montoTransferencia}) debe ser igual a monto (${data.monto})`,
-      });
-    }
-
-    // Comprobante obligatorio si hay transferencia
-    if (data.montoTransferencia > 0 && !data.comprobanteUrl) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['comprobanteUrl'],
-        message:
-          'comprobanteUrl es obligatorio cuando existe un monto de transferencia',
-      });
-    }
-
-    // Consistencia método/montos
-    if (data.metodoPago === 'efectivo' && data.montoTransferencia > 0) {
+    // Consistencia método/montos (la suma contra la cuota se valida en el dominio)
+    if (data.metodoPago === 'efectivo' && (data.transferAmount ?? 0) > 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['metodoPago'],
-        message:
-          'Método "efectivo" no permite montoTransferencia mayor a cero',
+        message: 'Método "efectivo" no permite transferAmount mayor a cero',
       });
     }
-    if (data.metodoPago === 'transferencia' && data.montoEfectivo > 0) {
+    if (data.metodoPago === 'transferencia' && (data.cashAmount ?? 0) > 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['metodoPago'],
-        message:
-          'Método "transferencia" no permite montoEfectivo mayor a cero',
+        message: 'Método "transferencia" no permite cashAmount mayor a cero',
       });
     }
     if (
       data.metodoPago === 'hibrido' &&
-      (data.montoEfectivo <= 0 || data.montoTransferencia <= 0)
+      (!data.cashAmount || !data.transferAmount)
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['metodoPago'],
         message:
-          'Método "hibrido" requiere que tanto montoEfectivo como montoTransferencia sean mayores a cero',
+          'Método "hibrido" requiere que tanto cashAmount como transferAmount sean mayores a cero',
       });
     }
   });
 
-export type CreatePagoDto = z.infer<typeof zPagoCreate>;
+export type RegistrarPagoDto = z.infer<typeof zRegistrarPago>;
 
 // ─────────────────────────────────────────────
 // DTO de SALIDA — Respuesta de un Pago
 // ─────────────────────────────────────────────
 
 export const zPagoResponse = z.object({
-  id: z.string().uuid(),
-  tandaId: z.string().uuid(),
-  participanteId: z.string().uuid(),
-  numeroPago: z.number().int().positive(),
-  monto: z.number(),
-  montoEfectivo: z.number(),
-  montoTransferencia: z.number(),
+  idPayment: z.number().int().positive(),
+  idNumber: z.number().int().positive(),
   metodoPago: zMetodoPago,
-  estado: zEstadoPago,
-  comprobanteUrl: z.string().url().nullable(),
-  montoOcrValidado: z.number().nullable(),
-  ocrAprobado: z.boolean().nullable(),
-  confirmadoOrganizadorEn: z.coerce.date().nullable(),
-  confirmadoReceptorEn: z.coerce.date().nullable(),
-  fechaPago: z.coerce.date(),
+  transferAmount: z.number(),
+  cashAmount: z.number(),
+  totalAmount: z.number(),
+  status: zEstadoPago,
+  confirmedByParticipant: z.boolean(),
+  confirmedByAdmin: z.boolean(),
+  ocrVerified: z.boolean(),
+  ocrDetectedAmount: z.number().nullable(),
+  evidenceUrl: z.string().url().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
