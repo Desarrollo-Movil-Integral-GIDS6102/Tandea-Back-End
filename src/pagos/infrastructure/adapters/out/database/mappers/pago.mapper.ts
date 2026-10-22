@@ -1,4 +1,4 @@
-import { Pago, MetodoPago, EstadoPago } from '../../../../../domain/entities/pago.entity';
+import { Pago, MetodoPago, EstadoPago } from '../../../../../domain/entities/Pago';
 import type { PagoRow, NewPagoRow } from '../schema/pago.schema';
 import type { PagoResponseDto } from '../../../../../application/dtos/pago.dto';
 
@@ -15,18 +15,26 @@ import type { PagoResponseDto } from '../../../../../application/dtos/pago.dto';
 export function toDomain(row: PagoRow): Pago {
   return Pago.reconstitute({
     id: row.id,
+    idNumber: row.numeroPago,
     tandaId: row.tandaId,
     participanteId: row.participanteId,
     numeroPago: row.numeroPago,
-    monto: parseFloat(row.monto),
-    montoEfectivo: parseFloat(row.montoEfectivo ?? '0'),
-    montoTransferencia: parseFloat(row.montoTransferencia ?? '0'),
+    transferAmount: parseFloat(row.montoTransferencia ?? '0'),
+    cashAmount: parseFloat(row.montoEfectivo ?? '0'),
+    totalAmount: parseFloat(row.monto),
     metodoPago: row.metodoPago as MetodoPago,
-    estado: row.estado as EstadoPago,
-    comprobanteUrl: row.comprobanteUrl ?? null,
-    montoOcrValidado:
+    status:
+      row.estado?.toUpperCase() === 'CONFIRMADO'
+        ? 'CONFIRMADO'
+        : row.estado?.toUpperCase() === 'RECHAZADO'
+          ? 'RECHAZADO'
+          : 'PENDIENTE',
+    confirmedByParticipant: row.confirmadoOrganizadorEn != null,
+    confirmedByAdmin: row.confirmadoOrganizadorEn != null,
+    evidenceUrl: row.comprobanteUrl ?? null,
+    ocrDetectedAmount:
       row.montoOcrValidado != null ? parseFloat(row.montoOcrValidado) : null,
-    ocrAprobado: row.ocrAprobado ?? null,
+    ocrVerified: row.ocrAprobado ?? false,
     confirmadoOrganizadorEn: row.confirmadoOrganizadorEn ?? null,
     confirmadoReceptorEn: row.confirmadoReceptorEn ?? null,
     fechaPago: row.fechaPago,
@@ -42,21 +50,21 @@ export function toPersistence(pago: Pago): NewPagoRow {
   const p = pago.toPrimitives();
   return {
     id: p.id,
-    tandaId: p.tandaId,
-    participanteId: p.participanteId,
-    numeroPago: p.numeroPago,
-    monto: String(p.monto),
-    montoEfectivo: String(p.montoEfectivo),
-    montoTransferencia: String(p.montoTransferencia),
+    tandaId: p.tandaId ?? '00000000-0000-0000-0000-000000000000',
+    participanteId: p.participanteId ?? '00000000-0000-0000-0000-000000000000',
+    numeroPago: p.numeroPago ?? p.idNumber,
+    monto: String(p.totalAmount),
+    montoEfectivo: String(p.cashAmount),
+    montoTransferencia: String(p.transferAmount),
     metodoPago: p.metodoPago,
-    estado: p.estado,
-    comprobanteUrl: p.comprobanteUrl,
+    estado: p.status.toLowerCase(),
+    comprobanteUrl: p.evidenceUrl ?? null,
     montoOcrValidado:
-      p.montoOcrValidado != null ? String(p.montoOcrValidado) : null,
-    ocrAprobado: p.ocrAprobado,
-    confirmadoOrganizadorEn: p.confirmadoOrganizadorEn,
-    confirmadoReceptorEn: p.confirmadoReceptorEn,
-    fechaPago: p.fechaPago,
+      p.ocrDetectedAmount != null ? String(p.ocrDetectedAmount) : null,
+    ocrAprobado: p.ocrVerified ?? null,
+    confirmadoOrganizadorEn: p.confirmadoOrganizadorEn ?? null,
+    confirmadoReceptorEn: p.confirmadoReceptorEn ?? null,
+    fechaPago: p.fechaPago ?? p.createdAt,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
@@ -68,21 +76,21 @@ export function toPersistence(pago: Pago): NewPagoRow {
 export function toResponseDto(pago: Pago): PagoResponseDto {
   const p = pago.toPrimitives();
   return {
-    id: p.id,
-    tandaId: p.tandaId,
-    participanteId: p.participanteId,
-    numeroPago: p.numeroPago,
-    monto: p.monto,
-    montoEfectivo: p.montoEfectivo,
-    montoTransferencia: p.montoTransferencia,
+    id: p.id ?? '',
+    tandaId: p.tandaId ?? '',
+    participanteId: p.participanteId ?? '',
+    numeroPago: p.numeroPago ?? p.idNumber,
+    monto: p.totalAmount,
+    montoEfectivo: p.cashAmount,
+    montoTransferencia: p.transferAmount,
     metodoPago: p.metodoPago,
-    estado: p.estado,
-    comprobanteUrl: p.comprobanteUrl,
-    montoOcrValidado: p.montoOcrValidado,
-    ocrAprobado: p.ocrAprobado,
-    confirmadoOrganizadorEn: p.confirmadoOrganizadorEn,
-    confirmadoReceptorEn: p.confirmadoReceptorEn,
-    fechaPago: p.fechaPago,
+    estado: p.status.toLowerCase() as any,
+    comprobanteUrl: p.evidenceUrl ?? null,
+    montoOcrValidado: p.ocrDetectedAmount ?? null,
+    ocrAprobado: p.ocrVerified ?? null,
+    confirmadoOrganizadorEn: p.confirmadoOrganizadorEn ?? null,
+    confirmadoReceptorEn: p.confirmadoReceptorEn ?? null,
+    fechaPago: p.fechaPago ?? p.createdAt,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
