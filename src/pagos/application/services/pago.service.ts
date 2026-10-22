@@ -94,6 +94,8 @@ export class PagoService implements PagoUseCasesPort {
     }
 
     // 4. Subir el comprobante (opcional en efectivo)
+    // TODO: si la transacción del paso 6 falla, el archivo queda huérfano en el storage;
+    // agregar StoragePort.eliminar() o una limpieza periódica.
     const evidenceUrl = comprobante
       ? await this.storage.subir(comprobante.buffer, {
           carpeta: 'comprobantes',
