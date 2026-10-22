@@ -371,6 +371,7 @@ export class DrizzleTandaRepository
     }));
   }
 
+
   async asignarSiLibre(
     idTanda: number,
     roundNumber: number,
@@ -465,6 +466,7 @@ export class DrizzleTandaRepository
 
     return NumeroMapper.toDomain(row);
   }
+
 
   // =========================================================================
   // HELPER MAPPER

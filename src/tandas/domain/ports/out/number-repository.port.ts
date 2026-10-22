@@ -41,4 +41,3 @@ export interface NumberRepositoryPort {
 }
 
 export const NUMBER_REPOSITORY_PORT = Symbol('NUMBER_REPOSITORY_PORT');
-
