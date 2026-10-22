@@ -28,6 +28,13 @@ export interface CrearPagoFactoryDto {
   numeroPago?: number;
 }
 
+export interface MontosPago {
+  metodoPago: MetodoPago;
+  transferAmount: number;
+  cashAmount: number;
+  totalAmount: number;
+}
+
 /**
  * Fábrica de Dominio: PagoFactory
  *
@@ -45,6 +52,60 @@ export class PagoFactory {
    * Crea y valida una instancia de Pago según el método de pago especificado.
    */
   public static crear(dto: CrearPagoFactoryDto): Pago {
+    const { metodoPago, transferAmount, cashAmount, totalAmount } =
+      PagoFactory.validarMontos(dto);
+
+    // Comprobante: obligatorio cuando hay transferencia, opcional en efectivo
+    const rawEvidence = dto.evidenceUrl ?? dto.fileUrl ?? dto.comprobanteUrl ?? null;
+    const cleanEvidence =
+      typeof rawEvidence === 'string' && rawEvidence.trim().length > 0
+        ? rawEvidence.trim()
+        : null;
+
+    if (metodoPago === 'transferencia' && !cleanEvidence) {
+      throw new ReglaNegocioPagoError(
+        'El pago por transferencia requiere un comprobante digital obligatorio (URL de comprobante)',
+      );
+    }
+    if (metodoPago === 'hibrido' && !cleanEvidence) {
+      throw new ReglaNegocioPagoError(
+        'El pago híbrido requiere un comprobante digital obligatorio para respaldar el monto de transferencia',
+      );
+    }
+
+    // Instanciar la entidad Pago con el estado inicial correspondiente
+    const confirmedByParticipant = dto.confirmedByParticipant ?? false;
+    const confirmedByAdmin = dto.confirmedByAdmin ?? false;
+
+    const status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
+      dto.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
+
+    return Pago.create({
+      idPayment: dto.idPayment,
+      id: dto.id,
+      idNumber: dto.idNumber,
+      transferAmount,
+      cashAmount,
+      totalAmount,
+      metodoPago,
+      status,
+      confirmedByParticipant,
+      confirmedByAdmin,
+      evidenceUrl: cleanEvidence,
+      ocrDetectedAmount: dto.ocrDetectedAmount ?? null,
+      ocrVerified: dto.ocrVerified ?? false,
+      fechaPago: dto.fechaPago,
+      tandaId: dto.tandaId,
+      participanteId: dto.participanteId,
+      numeroPago: dto.numeroPago,
+    });
+  }
+
+  /**
+   * Valida idNumber, método y montos (en centavos) sin exigir comprobante.
+   * Permite rechazar montos inválidos antes de subir cualquier archivo.
+   */
+  public static validarMontos(dto: CrearPagoFactoryDto): MontosPago {
     // 1. Validar identificador de número/turno
     if (
       dto.idNumber === undefined ||
@@ -74,12 +135,6 @@ export class PagoFactory {
     PagoFactory.validarMonto(rawTotal, 'La cuota total');
     PagoFactory.validarMonto(rawTransfer, 'El monto de transferencia');
     PagoFactory.validarMonto(rawCash, 'El monto en efectivo');
-
-    const rawEvidence = dto.evidenceUrl ?? dto.fileUrl ?? dto.comprobanteUrl ?? null;
-    const cleanEvidence =
-      typeof rawEvidence === 'string' && rawEvidence.trim().length > 0
-        ? rawEvidence.trim()
-        : null;
 
     let finalTransfer = 0;
     let finalCash = 0;
@@ -137,12 +192,6 @@ export class PagoFactory {
           }
         }
 
-        if (!cleanEvidence) {
-          throw new ReglaNegocioPagoError(
-            'El pago por transferencia requiere un comprobante digital obligatorio (URL de comprobante)',
-          );
-        }
-
         finalTransfer = Number(transferAmount.toFixed(2));
         finalCash = 0;
         finalTotal = finalTransfer;
@@ -172,44 +221,18 @@ export class PagoFactory {
           finalTotal = sum;
         }
 
-        if (!cleanEvidence) {
-          throw new ReglaNegocioPagoError(
-            'El pago híbrido requiere un comprobante digital obligatorio para respaldar el monto de transferencia',
-          );
-        }
-
         finalTransfer = Number(rawTransfer.toFixed(2));
         finalCash = Number(rawCash.toFixed(2));
         break;
       }
     }
 
-    // 5. Instanciar la entidad Pago con el estado inicial correspondiente
-    const confirmedByParticipant = dto.confirmedByParticipant ?? false;
-    const confirmedByAdmin = dto.confirmedByAdmin ?? false;
-
-    let status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
-      dto.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
-
-    return Pago.create({
-      idPayment: dto.idPayment,
-      id: dto.id,
-      idNumber: dto.idNumber,
+    return {
+      metodoPago: metodoNormalizado,
       transferAmount: finalTransfer,
       cashAmount: finalCash,
       totalAmount: finalTotal,
-      metodoPago: metodoNormalizado,
-      status,
-      confirmedByParticipant,
-      confirmedByAdmin,
-      evidenceUrl: cleanEvidence,
-      ocrDetectedAmount: dto.ocrDetectedAmount ?? null,
-      ocrVerified: dto.ocrVerified ?? false,
-      fechaPago: dto.fechaPago,
-      tandaId: dto.tandaId,
-      participanteId: dto.participanteId,
-      numeroPago: dto.numeroPago,
-    });
+    };
   }
 
   /**

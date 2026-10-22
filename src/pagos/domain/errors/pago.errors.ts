@@ -22,6 +22,32 @@ export class PagoNotFoundError extends DomainError {
   }
 }
 
+export class NumeroNoEncontradoError extends DomainError {
+  constructor(public readonly idNumber: number) {
+    super(`El número (turno) con id ${idNumber} no existe`);
+  }
+}
+
+export class TandaNoEncontradaError extends DomainError {
+  constructor(public readonly idNumber: number) {
+    super(`La tanda del número (turno) con id ${idNumber} no existe`);
+  }
+}
+
+export class NumeroAjenoError extends DomainError {
+  constructor() {
+    super('El número (turno) no pertenece al usuario autenticado');
+  }
+}
+
+export class PagoDuplicadoError extends DomainError {
+  constructor(public readonly idNumber: number) {
+    super(
+      `Ya existe un pago pendiente o confirmado para el número (turno) ${idNumber} en esta vuelta`,
+    );
+  }
+}
+
 export class PagoYaConfirmadoError extends DomainError {
   constructor() {
     super('Este pago ya está completamente confirmado');

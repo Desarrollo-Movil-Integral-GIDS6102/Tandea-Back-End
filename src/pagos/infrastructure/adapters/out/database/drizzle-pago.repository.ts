@@ -1,12 +1,18 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
-import { PagoRepositoryPort } from '../../../../domain/ports/out/pago-repository.port';
+import {
+  NumeroConCuota,
+  PagoRepositoryPort,
+} from '../../../../domain/ports/out/pago-repository.port';
 import { Pago } from '../../../../domain/entities/Pago';
+import { PagoDuplicadoError } from '../../../../domain/errors/pago.errors';
 import {
   paymentTable,
   evidenceTable,
+  numberTable,
+  tandaTable,
 } from '../../../../../database/tandea.schema';
 import { toDomain, toPersistence } from './mappers/pago.mapper';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
@@ -28,6 +34,23 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
     const { idPayment: _omit, ...data } = toPersistence(pago);
 
     return this.db.transaction(async (tx) => {
+      // Bloquea el número para que dos registros simultáneos no generen duplicados
+      await tx
+        .select({ idNumber: numberTable.idNumber })
+        .from(numberTable)
+        .where(eq(numberTable.idNumber, data.idNumber))
+        .for('update');
+
+      const [activo] = await tx
+        .select({ idPayment: paymentTable.idPayment })
+        .from(paymentTable)
+        .where(this.pagoActivoDe(data.idNumber))
+        .limit(1);
+
+      if (activo) {
+        throw new PagoDuplicadoError(data.idNumber);
+      }
+
       const [row] = await tx.insert(paymentTable).values(data).returning();
 
       if (pago.evidenceUrl) {
@@ -40,6 +63,54 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
 
       return toDomain(row, pago.evidenceUrl);
     });
+  }
+
+  async buscarNumeroConCuota(idNumber: number): Promise<NumeroConCuota | null> {
+    const [row] = await this.db
+      .select({
+        idNumber: numberTable.idNumber,
+        idUser: numberTable.idUser,
+        roundNumber: numberTable.roundNumber,
+        idTanda: tandaTable.idTanda,
+        contributionAmount: tandaTable.contributionAmount,
+      })
+      .from(numberTable)
+      .leftJoin(
+        tandaTable,
+        and(
+          eq(tandaTable.idTanda, numberTable.idTanda),
+          isNull(tandaTable.deletedAt),
+        ),
+      )
+      .where(and(eq(numberTable.idNumber, idNumber), isNull(numberTable.deletedAt)))
+      .limit(1);
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      idNumber: row.idNumber,
+      idUser: row.idUser,
+      roundNumber: row.roundNumber,
+      tanda:
+        row.idTanda != null && row.contributionAmount != null
+          ? {
+              idTanda: row.idTanda,
+              contributionAmount: parseFloat(row.contributionAmount),
+            }
+          : null,
+    };
+  }
+
+  async existePagoActivo(idNumber: number): Promise<boolean> {
+    const [row] = await this.db
+      .select({ idPayment: paymentTable.idPayment })
+      .from(paymentTable)
+      .where(this.pagoActivoDe(idNumber))
+      .limit(1);
+
+    return row !== undefined;
   }
 
   async findById(idPayment: number): Promise<Pago | null> {
@@ -71,6 +142,13 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
       .returning();
 
     return toDomain(updatedRow, pago.evidenceUrl);
+  }
+
+  private pagoActivoDe(idNumber: number) {
+    return and(
+      eq(paymentTable.idNumber, idNumber),
+      inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+    );
   }
 
   private async ultimaEvidencia(idPayment: number): Promise<string | null> {
