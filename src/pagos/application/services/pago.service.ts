@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { Pago } from '../../domain/entities/pago.entity';
+import { Pago, PagoFactory } from '../../domain/entities/Pago';
 import { PagoNotFoundError } from '../../domain/errors/pago.errors';
 import {
   PAGO_REPOSITORY_PORT,
@@ -18,7 +18,7 @@ import {
  *  - Depende EXCLUSIVAMENTE del puerto secundario `PagoRepositoryPort` (Inversión de Dependencias).
  *  - No conoce Drizzle, PostgreSQL ni detalles de persistencia.
  *  - No maneja excepciones HTTP — lanza o propaga DomainErrors puros.
- *  - Delega las mutaciones y validaciones de estado a la entidad rica de dominio `Pago`.
+ *  - Delega las mutaciones y validaciones de estado a la entidad rica de dominio `Pago` y su `PagoFactory`.
  */
 @Injectable()
 export class PagoService implements PagoUseCasesPort {
@@ -39,13 +39,15 @@ export class PagoService implements PagoUseCasesPort {
       tandaId: command.tandaId,
       participanteId: command.participanteId,
       numeroPago: command.numeroPago,
-      monto: command.monto,
-      montoEfectivo: command.montoEfectivo,
-      montoTransferencia: command.montoTransferencia,
+      totalAmount: command.monto,
+      cashAmount: command.montoEfectivo,
+      transferAmount: command.montoTransferencia,
       metodoPago: command.metodoPago,
-      comprobanteUrl: command.comprobanteUrl ?? null,
+      evidenceUrl: command.comprobanteUrl ?? null,
       fechaPago: command.fechaPago,
+      confirmedByParticipant: true,
     });
+
 
     // 2. Persistir a través del puerto de salida
     const pagoGuardado = await this.pagoRepository.create(pago);

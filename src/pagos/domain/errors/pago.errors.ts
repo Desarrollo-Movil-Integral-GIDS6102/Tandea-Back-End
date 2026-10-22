@@ -34,6 +34,18 @@ export class ConfirmacionOrganizadorPreviaError extends DomainError {
   }
 }
 
+export class ConfirmacionParticipantePreviaError extends DomainError {
+  constructor() {
+    super('El participante ya confirmó este pago previamente');
+  }
+}
+
+export class ConfirmacionAdminPreviaError extends DomainError {
+  constructor() {
+    super('El administrador ya confirmó este pago previamente');
+  }
+}
+
 export class OrganizadorDebeConfirmarPrimeroError extends DomainError {
   constructor() {
     super('El organizador debe confirmar primero antes de que el receptor pueda confirmar');
@@ -62,3 +74,4 @@ export class ReglaNegocioPagoError extends DomainError {
     super(message);
   }
 }
+
