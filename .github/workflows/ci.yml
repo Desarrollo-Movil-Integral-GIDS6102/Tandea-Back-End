@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    name: Lint, build y pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Pruebas unitarias
+        run: npm test
+
+  integracion:
+    name: Pruebas de integración (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tandea
+          POSTGRES_PASSWORD: tandea_ci
+          POSTGRES_DB: tandea_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tandea -d tandea_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Base efímera del runner; nunca apunta a Railway (el seed lo bloquea)
+      DATABASE_URL: postgresql://tandea:tandea_ci@localhost:5432/tandea_test
+      TEST_DATABASE_URL: postgresql://tandea:tandea_ci@localhost:5432/tandea_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Aplicar migraciones
+        run: npm run db:migrate
+
+      # app.e2e-spec.ts queda fuera: usa la plataforma Express, que el proyecto no instala
+      - name: Pruebas de integración
+        run: npx vitest run --config ./vitest.config.e2e.ts test/number-unique.e2e-spec.ts test/numero-concurrencia.e2e-spec.ts
