@@ -117,7 +117,7 @@ interface CrearPagoFactoryDto {
 * Comprobante digital (`evidenceUrl`) es **obligatorio** para validar la fracción transferida vía SPEI.
 * Invariante financiera:
   $$\text{transferAmount} + \text{cashAmount} == \text{totalAmount}$$
-  Si la suma no coincide exactamente con la cuota total (tolerancia decimal de 2 dígitos), se lanza `ReglaNegocioPagoError`.
+  Si la suma no coincide exactamente con la cuota total (comparada en centavos enteros), se lanza `MontoHibridoInvalidoError` (subclase de `ReglaNegocioPagoError`).
 
 ---
 
@@ -143,7 +143,70 @@ El almacenamiento de comprobantes digitales se realiza mediante el puerto [`Stor
 
 ---
 
-## 🧪 4. Guía de Pruebas
+## 🌐 4. Endpoint `POST /api/v1/pagos` (AP-03)
+
+Registra el pago del turno (`number`) del participante autenticado. El pago queda `PENDIENTE` hasta que el organizador lo confirme.
+
+* **Auth**: `Authorization: Bearer <jwt>` (el `number` debe pertenecer al usuario del token).
+* **Content-Type**: `multipart/form-data`.
+
+| Campo | Tipo | Obligatorio | Descripción |
+| :--- | :--- | :--- | :--- |
+| `idNumber` | entero | Sí | Turno del participante. Cada `number` pertenece a una vuelta. |
+| `metodoPago` | `efectivo \| transferencia \| hibrido` | Sí | Modalidad del pago. |
+| `transferAmount` | decimal (2) | Híbrido | Parte por transferencia. En `transferencia`, si se omite se usa la cuota. |
+| `cashAmount` | decimal (2) | Híbrido | Parte en efectivo. En `efectivo`, si se omite se usa la cuota. |
+| `file` | JPG, PNG o PDF (≤ 10 MB) | Transferencia e híbrido | Comprobante. Opcional en efectivo. |
+
+Reglas: el monto debe ser igual a la cuota de la tanda (`transferAmount + cashAmount = cuota` en híbrido, comparado en centavos). Si el OCR falla o no detecta el monto, el pago se guarda igual con `ocrVerified = false`. Al guardarse se emite `pago.registrado` con `{ paymentId, tandaId, userId }`.
+
+### Ejemplo
+```bash
+curl -X POST http://localhost:3000/api/v1/pagos \
+  -H "Authorization: Bearer $TOKEN" \
+  -F idNumber=10 \
+  -F metodoPago=hibrido \
+  -F transferAmount=600 \
+  -F cashAmount=400 \
+  -F file=@comprobante.jpg
+```
+
+### Respuesta `201 Created`
+```json
+{
+  "idPayment": 45,
+  "idNumber": 10,
+  "metodoPago": "hibrido",
+  "transferAmount": 600,
+  "cashAmount": 400,
+  "totalAmount": 1000,
+  "status": "PENDIENTE",
+  "confirmedByParticipant": true,
+  "confirmedByAdmin": false,
+  "ocrVerified": false,
+  "ocrDetectedAmount": null,
+  "evidenceUrl": "https://res.cloudinary.com/<cloud>/image/upload/comprobantes/pago_numero_10_1761140000000.jpg",
+  "createdAt": "2026-10-22T16:00:00.000Z",
+  "updatedAt": "2026-10-22T16:00:00.000Z"
+}
+```
+
+### Errores
+Formato: `{ "statusCode", "error", "message" }` (los 422 de Zod incluyen además `details`).
+
+| Código | Cuándo |
+| :--- | :--- |
+| `400` | Archivo de tipo no permitido, contenido que no coincide con su tipo, archivo vacío o en un campo distinto de `file`. |
+| `401` | Sin token o token inválido. |
+| `403` | El `number` no pertenece al usuario (incluye números muertos). |
+| `404` | El `number` o su tanda no existen. |
+| `409` | Ya existe un pago `PENDIENTE` o `CONFIRMADO` para ese `number`. |
+| `413` | El comprobante supera 10 MB. |
+| `422` | Campos inválidos (Zod), monto distinto a la cuota, suma híbrida incorrecta o falta el comprobante en transferencia/híbrido. |
+
+---
+
+## 🧪 5. Guía de Pruebas
 
 El módulo cuenta con cobertura total de pruebas unitarias y de integración con Vitest sin necesidad de levantar servicios de base de datos ni contenedor de NestJS.
 
@@ -162,7 +225,8 @@ npx vitest run src/pagos/domain/entities/pago.entity.spec.ts
 npx vitest run src/pagos/domain/factories/pago.factory.spec.ts
 npx vitest run test/cloudinary-adapter.spec.ts
 npx vitest run test/evidence-storage-integration.spec.ts
-> develop
+npx vitest run src/pagos/application/services/pago.service.spec.ts
+npx vitest run test/pago-controller.spec.ts
 ```
 
 ### Ejecutar en Modo Watch (Desarrollo Interactivo)

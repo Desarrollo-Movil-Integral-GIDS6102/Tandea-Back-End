@@ -1,5 +1,8 @@
-import { Pago, MetodoPago, EstadoPago } from '../../../../../domain/entities/Pago';
-import type { PagoRow, NewPagoRow } from '../schema/pago.schema';
+import { Pago, MetodoPago } from '../../../../../domain/entities/Pago';
+import type {
+  PaymentRow,
+  NewPaymentRow,
+} from '../../../../../../database/tandea.schema';
 import type { PagoResponseDto } from '../../../../../application/dtos/pago.dto';
 
 /**
@@ -10,87 +13,79 @@ import type { PagoResponseDto } from '../../../../../application/dtos/pago.dto';
  */
 
 /**
- * Convierte una fila de la base de datos (PagoRow) a la entidad rica de Dominio (Pago).
+ * La tabla `payment` no guarda el método: se deriva de los montos.
  */
-export function toDomain(row: PagoRow): Pago {
+function derivarMetodo(transferAmount: number, cashAmount: number): MetodoPago {
+  if (transferAmount > 0 && cashAmount > 0) return 'hibrido';
+  if (transferAmount > 0) return 'transferencia';
+  return 'efectivo';
+}
+
+/**
+ * Convierte una fila de `payment` (y la URL de su evidencia, si existe) a la entidad de Dominio.
+ */
+export function toDomain(row: PaymentRow, evidenceUrl: string | null = null): Pago {
+  const transferAmount = parseFloat(row.transferAmount ?? '0');
+  const cashAmount = parseFloat(row.cashAmount ?? '0');
+
   return Pago.reconstitute({
-    id: row.id,
-    idNumber: row.numeroPago,
-    tandaId: row.tandaId,
-    participanteId: row.participanteId,
-    numeroPago: row.numeroPago,
-    transferAmount: parseFloat(row.montoTransferencia ?? '0'),
-    cashAmount: parseFloat(row.montoEfectivo ?? '0'),
-    totalAmount: parseFloat(row.monto),
-    metodoPago: row.metodoPago as MetodoPago,
-    status:
-      row.estado?.toUpperCase() === 'CONFIRMADO'
-        ? 'CONFIRMADO'
-        : row.estado?.toUpperCase() === 'RECHAZADO'
-          ? 'RECHAZADO'
-          : 'PENDIENTE',
-    confirmedByParticipant: row.confirmadoOrganizadorEn != null,
-    confirmedByAdmin: row.confirmadoOrganizadorEn != null,
-    evidenceUrl: row.comprobanteUrl ?? null,
+    idPayment: row.idPayment,
+    idNumber: row.idNumber,
+    transferAmount,
+    cashAmount,
+    totalAmount: parseFloat(row.totalAmount),
+    metodoPago: derivarMetodo(transferAmount, cashAmount),
+    status: row.status,
+    confirmedByParticipant: row.confirmedByParticipant,
+    confirmedByAdmin: row.confirmedByAdmin,
+    evidenceUrl,
     ocrDetectedAmount:
-      row.montoOcrValidado != null ? parseFloat(row.montoOcrValidado) : null,
-    ocrVerified: row.ocrAprobado ?? false,
-    confirmadoOrganizadorEn: row.confirmadoOrganizadorEn ?? null,
-    confirmadoReceptorEn: row.confirmadoReceptorEn ?? null,
-    fechaPago: row.fechaPago,
+      row.ocrDetectedAmount != null ? parseFloat(row.ocrDetectedAmount) : null,
+    ocrVerified: row.ocrVerified,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
 }
 
 /**
- * Convierte una entidad de Dominio (Pago) al formato de inserción de Drizzle (NewPagoRow).
+ * Convierte una entidad de Dominio al formato de inserción de Drizzle (`payment`).
+ * Los montos se guardan como texto con 2 decimales para el tipo NUMERIC(12,2).
  */
-export function toPersistence(pago: Pago): NewPagoRow {
+export function toPersistence(pago: Pago): NewPaymentRow {
   const p = pago.toPrimitives();
   return {
-    id: p.id,
-    tandaId: p.tandaId ?? '00000000-0000-0000-0000-000000000000',
-    participanteId: p.participanteId ?? '00000000-0000-0000-0000-000000000000',
-    numeroPago: p.numeroPago ?? p.idNumber,
-    monto: String(p.totalAmount),
-    montoEfectivo: String(p.cashAmount),
-    montoTransferencia: String(p.transferAmount),
-    metodoPago: p.metodoPago,
-    estado: p.status.toLowerCase(),
-    comprobanteUrl: p.evidenceUrl ?? null,
-    montoOcrValidado:
-      p.ocrDetectedAmount != null ? String(p.ocrDetectedAmount) : null,
-    ocrAprobado: p.ocrVerified ?? null,
-    confirmadoOrganizadorEn: p.confirmadoOrganizadorEn ?? null,
-    confirmadoReceptorEn: p.confirmadoReceptorEn ?? null,
-    fechaPago: p.fechaPago ?? p.createdAt,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
+    idPayment: p.idPayment,
+    idNumber: p.idNumber,
+    transferAmount: p.transferAmount.toFixed(2),
+    cashAmount: p.cashAmount.toFixed(2),
+    totalAmount: p.totalAmount.toFixed(2),
+    ocrDetectedAmount:
+      p.ocrDetectedAmount != null ? p.ocrDetectedAmount.toFixed(2) : null,
+    ocrVerified: p.ocrVerified ?? false,
+    confirmedByParticipant: p.confirmedByParticipant,
+    confirmedByAdmin: p.confirmedByAdmin,
+    status: p.status,
   };
 }
 
 /**
- * Convierte una entidad de Dominio (Pago) al DTO de respuesta para clientes HTTP.
+ * Convierte una entidad de Dominio al DTO de respuesta para clientes HTTP.
  */
 export function toResponseDto(pago: Pago): PagoResponseDto {
   const p = pago.toPrimitives();
   return {
-    id: p.id ?? '',
-    tandaId: p.tandaId ?? '',
-    participanteId: p.participanteId ?? '',
-    numeroPago: p.numeroPago ?? p.idNumber,
-    monto: p.totalAmount,
-    montoEfectivo: p.cashAmount,
-    montoTransferencia: p.transferAmount,
+    idPayment: p.idPayment ?? 0,
+    idNumber: p.idNumber,
     metodoPago: p.metodoPago,
-    estado: p.status.toLowerCase() as any,
-    comprobanteUrl: p.evidenceUrl ?? null,
-    montoOcrValidado: p.ocrDetectedAmount ?? null,
-    ocrAprobado: p.ocrVerified ?? null,
-    confirmadoOrganizadorEn: p.confirmadoOrganizadorEn ?? null,
-    confirmadoReceptorEn: p.confirmadoReceptorEn ?? null,
-    fechaPago: p.fechaPago ?? p.createdAt,
+    transferAmount: p.transferAmount,
+    cashAmount: p.cashAmount,
+    totalAmount: p.totalAmount,
+    status: p.status,
+    confirmedByParticipant: p.confirmedByParticipant,
+    confirmedByAdmin: p.confirmedByAdmin,
+    ocrVerified: p.ocrVerified ?? false,
+    ocrDetectedAmount: p.ocrDetectedAmount ?? null,
+    evidenceUrl: p.evidenceUrl ?? null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };

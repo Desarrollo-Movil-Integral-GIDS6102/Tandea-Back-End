@@ -472,7 +472,7 @@ Todas las rutas tienen el prefijo global: **`/api/v1`**.
 1. **Métodos de Pago:**
    - `'efectivo'`: `montoEfectivo` debe ser igual a `monto`. `montoTransferencia` debe ser `0`.
    - `'transferencia'`: `montoTransferencia` debe ser igual a `monto`. `montoEfectivo` debe ser `0`. `comprobanteUrl` es **obligatorio**.
-   - `'hibrido'`: `montoEfectivo > 0` y `montoTransferencia > 0`, y su suma exacta debe igualar a `monto`. `comprobanteUrl` es **obligatorio**.
+   - `'hibrido'`: `montoEfectivo > 0` y `montoTransferencia > 0`, ambos con un máximo de 2 decimales y su suma exacta comparada en **centavos enteros** debe igualar a `monto`. `comprobanteUrl` es **obligatorio**. Si la suma discrepa o los montos son inválidos, se rechaza con `HTTP 422 Unprocessable Entity` (AP-03).
 2. **Ciclo de Vida y Estados del Pago:**
    - `pendiente`: Estado inicial al registrar el pago.
    - `confirmado_parcial`: El organizador confirmó la recepción del aporte.

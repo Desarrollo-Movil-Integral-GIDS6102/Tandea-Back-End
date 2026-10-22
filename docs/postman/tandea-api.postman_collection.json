@@ -38,7 +38,12 @@
     },
     {
       "key": "pagoId",
-      "value": "00000000-0000-0000-0000-000000000000",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "idNumber",
+      "value": "1",
       "type": "string"
     }
   ],
@@ -677,15 +682,15 @@
       "name": "3. Pagos (Payments & Dual Confirmation)",
       "item": [
         {
-          "name": "3.1 Crear Pago con Efectivo",
+          "name": "3.1 Registrar Pago en Efectivo (multipart, sin archivo)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.id) {",
-                  "    pm.collectionVariables.set('pagoId', res.id);",
+                  "if (res.idPayment) {",
+                  "    pm.collectionVariables.set('pagoId', res.idPayment);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -698,15 +703,15 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{token_participante}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
               }
             ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tandaId\": \"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11\",\n  \"participanteId\": \"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22\",\n  \"numeroPago\": 1,\n  \"monto\": 1500.00,\n  \"montoEfectivo\": 1500.00,\n  \"montoTransferencia\": 0.00,\n  \"metodoPago\": \"efectivo\",\n  \"fechaPago\": \"2026-11-05T12:00:00.000Z\"\n}"
+              "mode": "formdata",
+              "formdata": [
+                { "key": "idNumber", "value": "{{idNumber}}", "type": "text" },
+                { "key": "metodoPago", "value": "efectivo", "type": "text" },
+                { "key": "cashAmount", "value": "1500.00", "type": "text" }
+              ]
             },
             "url": {
               "raw": "{{baseUrl}}/pagos",
@@ -716,15 +721,15 @@
           }
         },
         {
-          "name": "3.2 Crear Pago Híbrido (Efectivo + Transferencia con Comprobante)",
+          "name": "3.2 Registrar Pago Híbrido (multipart con comprobante en file)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.id) {",
-                  "    pm.collectionVariables.set('pagoId', res.id);",
+                  "if (res.idPayment) {",
+                  "    pm.collectionVariables.set('pagoId', res.idPayment);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -737,15 +742,17 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{token_participante}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
               }
             ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tandaId\": \"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11\",\n  \"participanteId\": \"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22\",\n  \"numeroPago\": 1,\n  \"monto\": 1500.00,\n  \"montoEfectivo\": 500.00,\n  \"montoTransferencia\": 1000.00,\n  \"metodoPago\": \"hibrido\",\n  \"comprobanteUrl\": \"https://storage.googleapis.com/tandea-evidencias/comprobante-1.jpg\",\n  \"fechaPago\": \"2026-11-05T12:30:00.000Z\"\n}"
+              "mode": "formdata",
+              "formdata": [
+                { "key": "idNumber", "value": "{{idNumber}}", "type": "text" },
+                { "key": "metodoPago", "value": "hibrido", "type": "text" },
+                { "key": "cashAmount", "value": "500.00", "type": "text" },
+                { "key": "transferAmount", "value": "1000.00", "type": "text" },
+                { "key": "file", "type": "file", "src": "comprobante.jpg" }
+              ]
             },
             "url": {
               "raw": "{{baseUrl}}/pagos",

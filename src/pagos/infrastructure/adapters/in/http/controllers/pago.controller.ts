@@ -5,17 +5,23 @@ import {
   Patch,
   Body,
   Param,
-  ParseUUIDPipe,
+  ParseIntPipe,
   HttpCode,
   HttpStatus,
   UseFilters,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
   Inject,
 } from '@nestjs/common';
+import {
+  FileInterceptor,
+  type UploadedMultipartFile,
+} from '@nestjs/platform-fastify/multipart';
 
 import {
-  zPagoCreate,
+  zRegistrarPago,
   zPagoResponse,
-  type CreatePagoDto,
   type PagoResponseDto,
 } from '../../../../../application/dtos/pago.dto';
 import { toResponseDto } from '../../../out/database/mappers/pago.mapper';
@@ -24,18 +30,26 @@ import {
   type PagoUseCasesPort,
 } from '../../../../../domain/ports/in/pago-use-cases.port';
 import { PagoDomainExceptionFilter } from '../filters/pago-domain-exception.filter';
+import {
+  comprobanteMultipartOptions,
+  validarComprobante,
+} from '../multipart/comprobante.file';
+import { JwtAuthGuard } from '../../../../../../auth/infrastructure/adapters/in/http/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../../../../auth/infrastructure/adapters/in/http/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../../../../../auth/infrastructure/adapters/in/http/strategies/jwt.strategy';
 
 /**
  * Adaptador Primario (Driving / Inbound Adapter): PagoController
  *
  * Responsabilidades:
  *  1. Recibir y responder peticiones sobre HTTP.
- *  2. Validar el payload de entrada con Zod.
+ *  2. Validar el payload de entrada con Zod y el comprobante (tipo, firma y tamaño).
  *  3. Invocar al puerto de entrada (casos de uso).
  *  4. Mapear la entidad de dominio a DTO de respuesta y validarlo.
  *  5. Capturar y traducir errores mediante PagoDomainExceptionFilter.
  */
 @Controller('pagos')
+@UseGuards(JwtAuthGuard)
 @UseFilters(PagoDomainExceptionFilter)
 export class PagoController {
   constructor(
@@ -44,24 +58,27 @@ export class PagoController {
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
-  // POST /pagos — Crear un nuevo pago
+  // POST /pagos — Registrar el pago de un turno (multipart/form-data, AP-03)
   // ─────────────────────────────────────────────────────────────────────────
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async crearPago(@Body() body: unknown): Promise<PagoResponseDto> {
-    const dto: CreatePagoDto = zPagoCreate.parse(body);
+  @UseInterceptors(FileInterceptor('file', comprobanteMultipartOptions))
+  async registrarPago(
+    @Body() body: unknown,
+    @UploadedFile() file: UploadedMultipartFile | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PagoResponseDto> {
+    const dto = zRegistrarPago.parse(body ?? {});
+    const comprobante = file ? validarComprobante(file) : null;
 
-    const pago = await this.pagoService.crearPago({
-      tandaId: dto.tandaId,
-      participanteId: dto.participanteId,
-      numeroPago: dto.numeroPago,
-      monto: dto.monto,
-      montoEfectivo: dto.montoEfectivo,
-      montoTransferencia: dto.montoTransferencia,
+    const pago = await this.pagoService.registrar({
+      idUser: user.idUser,
+      idNumber: dto.idNumber,
       metodoPago: dto.metodoPago,
-      comprobanteUrl: dto.comprobanteUrl,
-      fechaPago: dto.fechaPago,
+      transferAmount: dto.transferAmount,
+      cashAmount: dto.cashAmount,
+      comprobante,
     });
 
     return zPagoResponse.parse(toResponseDto(pago));
@@ -73,7 +90,7 @@ export class PagoController {
 
   @Get(':id')
   async obtenerPago(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ): Promise<PagoResponseDto> {
     const pago = await this.pagoService.obtenerPago(id);
     return zPagoResponse.parse(toResponseDto(pago));
@@ -85,7 +102,7 @@ export class PagoController {
 
   @Patch(':id/confirmar-organizador')
   async confirmarOrganizador(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ): Promise<PagoResponseDto> {
     const pago = await this.pagoService.confirmarOrganizador(id);
     return zPagoResponse.parse(toResponseDto(pago));
@@ -97,7 +114,7 @@ export class PagoController {
 
   @Patch(':id/confirmar-receptor')
   async confirmarReceptor(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ): Promise<PagoResponseDto> {
     const pago = await this.pagoService.confirmarReceptor(id);
     return zPagoResponse.parse(toResponseDto(pago));
