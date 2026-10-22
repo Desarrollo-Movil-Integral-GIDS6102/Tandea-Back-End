@@ -121,7 +121,6 @@ interface CrearPagoFactoryDto {
 
 ---
 
-
 ## ☁️ 3. Almacenamiento de Comprobantes (`StoragePort` & `CloudinaryAdapter`)
 
 El almacenamiento de comprobantes digitales se realiza mediante el puerto [`StoragePort`](../src/pagos/domain/ports/out/storage.port.ts) desacoplado de la infraestructura.
@@ -149,10 +148,12 @@ El almacenamiento de comprobantes digitales se realiza mediante el puerto [`Stor
 El módulo cuenta con cobertura total de pruebas unitarias y de integración con Vitest sin necesidad de levantar servicios de base de datos ni contenedor de NestJS.
 
 
+
 ### Ejecutar Todas las Pruebas
 ```bash
 npm test
 ```
+
 
 
 ### Ejecutar Pruebas Específicas de Pagos, Fábrica y Almacenamiento
@@ -190,5 +191,6 @@ npm run test:watch
    - Subida a carpeta `comprobantes/` con compresión previa de peso/formato.
    - Lectura de credenciales desde variables de entorno.
    - Guardado de la URL segura en `evidence.file_url` vinculado a `idPayment`.
+
 
 
