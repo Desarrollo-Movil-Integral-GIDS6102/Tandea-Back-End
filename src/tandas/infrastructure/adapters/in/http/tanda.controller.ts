@@ -114,6 +114,33 @@ export class TandaController {
   }
 
   /**
+   * GET /tandas/mias?rol=participante|organizador
+   * Listar tandas del usuario autenticado según su rol (participante u organizador).
+   */
+  @Get('mias')
+  async listarMisTandas(
+    @Query('rol') rol: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const scope = (rol === 'organizador' || rol === 'dueno') ? 'dueno' : 'participante';
+    const resultado = await this.tandaService.listarTandas(
+      { scope, page: 1, limit: 50 },
+      user.idUser,
+      user.role,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      data: resultado.data,
+      total: resultado.total,
+      page: resultado.page,
+      limit: resultado.limit,
+      totalPages: resultado.totalPages,
+    };
+  }
+
+
+  /**
    * GET /tandas/codigo/:inviteCode
    * Consultar datos de una tanda por código de invitación (útil para previsualizar antes de unirse).
    */
