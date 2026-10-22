@@ -1,8 +1,15 @@
 import {
   ConfirmacionOrganizadorPreviaError,
+  MontoHibridoInvalidoError,
   OrganizadorDebeConfirmarPrimeroError,
   PagoYaConfirmadoError,
+  ReglaNegocioPagoError,
 } from '../errors/pago.errors';
+import {
+  esMontoMonetarioValido,
+  toCentavos,
+  sumarCentavosExactos,
+} from '../utils/moneda.util';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'hibrido';
 export type EstadoPago = 'pendiente' | 'confirmado_parcial' | 'confirmado' | 'rechazado';
@@ -65,6 +72,7 @@ export class Pago {
    * Crea una nueva instancia de Pago garantizando el estado inicial por defecto.
    */
   public static create(props: CreatePagoProps): Pago {
+    Pago.validarReglasCreacion(props);
     const now = new Date();
     return new Pago({
       id: props.id ?? crypto.randomUUID(),
@@ -85,6 +93,55 @@ export class Pago {
       createdAt: now,
       updatedAt: now,
     });
+  }
+
+  private static validarReglasCreacion(props: CreatePagoProps): void {
+    if (!esMontoMonetarioValido(props.monto) || props.monto <= 0) {
+      throw new ReglaNegocioPagoError('El monto debe ser un número positivo con máximo 2 decimales');
+    }
+    if (!esMontoMonetarioValido(props.montoEfectivo)) {
+      throw new ReglaNegocioPagoError('El monto en efectivo debe ser un número finito no negativo con máximo 2 decimales');
+    }
+    if (!esMontoMonetarioValido(props.montoTransferencia)) {
+      throw new ReglaNegocioPagoError('El monto de transferencia debe ser un número finito no negativo con máximo 2 decimales');
+    }
+
+    if (props.metodoPago === 'efectivo') {
+      if (props.montoTransferencia > 0) {
+        throw new ReglaNegocioPagoError('Método "efectivo" no permite montoTransferencia mayor a cero');
+      }
+      if (toCentavos(props.montoEfectivo) !== toCentavos(props.monto)) {
+        throw new ReglaNegocioPagoError('El monto en efectivo debe ser igual al monto total');
+      }
+    } else if (props.metodoPago === 'transferencia') {
+      if (props.montoEfectivo > 0) {
+        throw new ReglaNegocioPagoError('Método "transferencia" no permite montoEfectivo mayor a cero');
+      }
+      if (toCentavos(props.montoTransferencia) !== toCentavos(props.monto)) {
+        throw new ReglaNegocioPagoError('El monto de transferencia debe ser igual al monto total');
+      }
+      if (!props.comprobanteUrl || props.comprobanteUrl.trim() === '') {
+        throw new ReglaNegocioPagoError('comprobanteUrl es obligatorio cuando existe un monto de transferencia');
+      }
+    } else if (props.metodoPago === 'hibrido') {
+      if (props.montoEfectivo <= 0 || props.montoTransferencia <= 0) {
+        throw new ReglaNegocioPagoError('Método "hibrido" requiere que tanto montoEfectivo como montoTransferencia sean mayores a cero');
+      }
+      if (!sumarCentavosExactos(props.montoEfectivo, props.montoTransferencia, props.monto)) {
+        const sumaCalculada = (toCentavos(props.montoEfectivo) + toCentavos(props.montoTransferencia)) / 100;
+        throw new MontoHibridoInvalidoError(
+          props.montoEfectivo,
+          props.montoTransferencia,
+          sumaCalculada,
+          props.monto,
+        );
+      }
+      if (!props.comprobanteUrl || props.comprobanteUrl.trim() === '') {
+        throw new ReglaNegocioPagoError('comprobanteUrl es obligatorio cuando existe un monto de transferencia');
+      }
+    } else {
+      throw new ReglaNegocioPagoError(`Método de pago no reconocido: ${String(props.metodoPago)}`);
+    }
   }
 
   // ── Getters de Dominio ───────────────────────────────────────────────────
