@@ -8,6 +8,7 @@ import { FastifyReply } from 'fastify';
 import {
   DomainError,
   PagoNotFoundError,
+  MontoHibridoInvalidoError,
 } from '../../../../../domain/errors/pago.errors';
 
 /**
@@ -30,6 +31,9 @@ export class PagoDomainExceptionFilter implements ExceptionFilter {
     if (exception instanceof PagoNotFoundError) {
       status = HttpStatus.NOT_FOUND;
       error = 'Not Found';
+    } else if (exception instanceof MontoHibridoInvalidoError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      error = 'Unprocessable Entity';
     }
 
     response.status(status).send({

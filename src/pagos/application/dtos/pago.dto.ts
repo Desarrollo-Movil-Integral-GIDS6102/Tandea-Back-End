@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { toCentavos } from '../../domain/utils/moneda.util';
 
 // ─────────────────────────────────────────────
 // Enums compartidos
@@ -28,10 +29,21 @@ export const zPagoCreate = z
       .positive({ message: 'El número de pago debe ser un entero positivo' }),
     monto: z
       .number()
+      .finite({ message: 'El monto debe ser un número finito' })
       .positive({ message: 'El monto debe ser mayor a cero' })
       .multipleOf(0.01, { message: 'El monto no puede tener más de 2 decimales' }),
-    montoEfectivo: z.number().min(0).default(0),
-    montoTransferencia: z.number().min(0).default(0),
+    montoEfectivo: z
+      .number({ invalid_type_error: 'El monto en efectivo debe ser un número' })
+      .finite({ message: 'El monto en efectivo debe ser un número finito' })
+      .min(0, { message: 'El monto en efectivo no puede ser negativo' })
+      .multipleOf(0.01, { message: 'El monto en efectivo no puede tener más de 2 decimales' })
+      .default(0),
+    montoTransferencia: z
+      .number({ invalid_type_error: 'El monto de transferencia debe ser un número' })
+      .finite({ message: 'El monto de transferencia debe ser un número finito' })
+      .min(0, { message: 'El monto de transferencia no puede ser negativo' })
+      .multipleOf(0.01, { message: 'El monto de transferencia no puede tener más de 2 decimales' })
+      .default(0),
     metodoPago: zMetodoPago,
     comprobanteUrl: z
       .string()
@@ -43,12 +55,16 @@ export const zPagoCreate = z
     }),
   })
   .superRefine((data, ctx) => {
-    const totalParciales = parseFloat(
-      (data.montoEfectivo + data.montoTransferencia).toFixed(2),
-    );
+    // Comparación monetaria exacta en centavos enteros (AP-03)
+    const efectivoCentavos = toCentavos(data.montoEfectivo);
+    const transferenciaCentavos = toCentavos(data.montoTransferencia);
+    const totalCentavos = toCentavos(data.monto);
+    const sumaCentavos = efectivoCentavos + transferenciaCentavos;
+
+
 
     // Validar que los parciales sumen el total
-    if (totalParciales !== data.monto) {
+    if (sumaCentavos !== totalCentavos) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['monto'],
@@ -85,7 +101,7 @@ export const zPagoCreate = z
     }
     if (
       data.metodoPago === 'hibrido' &&
-      (data.montoEfectivo === 0 || data.montoTransferencia === 0)
+      (data.montoEfectivo <= 0 || data.montoTransferencia <= 0)
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

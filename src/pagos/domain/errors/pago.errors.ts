@@ -52,9 +52,20 @@ export class OrganizadorDebeConfirmarPrimeroError extends DomainError {
   }
 }
 
-export class PagoRechazadoError extends DomainError {
-  constructor() {
-    super('No se pueden realizar acciones de confirmación sobre un pago rechazado');
+/**
+ * Error lanzado cuando la suma de montoEfectivo y montoTransferencia
+ * no coincide exactamente con el monto total declarado en un pago híbrido (AP-03).
+ */
+export class MontoHibridoInvalidoError extends DomainError {
+  constructor(
+    public readonly montoEfectivo: number,
+    public readonly montoTransferencia: number,
+    public readonly sumaCalculada: number,
+    public readonly montoEsperado: number,
+  ) {
+    super(
+      `La suma de efectivo ($${montoEfectivo}) y transferencia ($${montoTransferencia}) es $${sumaCalculada}, pero debe ser igual a la cuota total de $${montoEsperado}`,
+    );
   }
 }
 

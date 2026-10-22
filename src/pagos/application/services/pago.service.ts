@@ -32,9 +32,10 @@ export class PagoService implements PagoUseCasesPort {
   // ─────────────────────────────────────────────────────────────────────────
 
   async crearPago(command: CrearPagoCommand): Promise<Pago> {
-    // 1. Instanciar la entidad de dominio a través de PagoFactory
-    const pago = PagoFactory.crear({
-      idNumber: command.numeroPago,
+    // TODO(AP-03): Validar que command.monto sea igual a la cuota real de la tanda (contributionAmount)
+    // una vez que se defina el puerto/contrato secundario de comunicación entre el módulo de Pagos y Tandas.
+    // 1. Instanciar la entidad de dominio garantizando el estado inicial y validaciones de negocio
+    const pago = Pago.create({
       tandaId: command.tandaId,
       participanteId: command.participanteId,
       numeroPago: command.numeroPago,
