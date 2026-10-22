@@ -17,7 +17,7 @@ export abstract class DomainError extends Error {
 }
 
 export class PagoNotFoundError extends DomainError {
-  constructor(public readonly id: string) {
+  constructor(public readonly id: number | string) {
     super(`Pago con id "${id}" no encontrado`);
   }
 }
@@ -52,11 +52,23 @@ export class OrganizadorDebeConfirmarPrimeroError extends DomainError {
   }
 }
 
+export class ReglaNegocioPagoError extends DomainError {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export class PagoRechazadoError extends DomainError {
+  constructor() {
+    super('El pago fue rechazado y no admite más confirmaciones');
+  }
+}
+
 /**
  * Error lanzado cuando la suma de montoEfectivo y montoTransferencia
  * no coincide exactamente con el monto total declarado en un pago híbrido (AP-03).
  */
-export class MontoHibridoInvalidoError extends DomainError {
+export class MontoHibridoInvalidoError extends ReglaNegocioPagoError {
   constructor(
     public readonly montoEfectivo: number,
     public readonly montoTransferencia: number,
@@ -68,10 +80,3 @@ export class MontoHibridoInvalidoError extends DomainError {
     );
   }
 }
-
-export class ReglaNegocioPagoError extends DomainError {
-  constructor(message: string) {
-    super(message);
-  }
-}
-

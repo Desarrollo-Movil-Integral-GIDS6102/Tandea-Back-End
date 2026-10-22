@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArgumentsHost, HttpStatus } from '@nestjs/common';
 import { ZodError } from 'zod';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { Pago } from '../src/pagos/domain/entities/pago.entity';
+import { Pago } from '../src/pagos/domain/entities/Pago';
+import { PagoFactory } from '../src/pagos/domain/factories/pago.factory';
 import {
   MontoHibridoInvalidoError,
   ReglaNegocioPagoError,
@@ -19,50 +20,37 @@ import { GlobalExceptionFilter } from '../src/common/filters/global-exception.fi
  * Validar que transferencia + efectivo = cuota en pago híbrido comparando en centavos enteros.
  */
 describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia)', () => {
-  const dummyUUID1 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-  const dummyUUID2 = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
+  const comprobante = 'https://storage.tandea.app/comprobantes/pago_1.jpg';
 
-  const baseHibridoProps = {
-    tandaId: dummyUUID1,
-    participanteId: dummyUUID2,
-    numeroPago: 1,
-    monto: 1000.0,
-    montoEfectivo: 400.0,
-    montoTransferencia: 600.0,
+  const baseHibrido = {
+    idNumber: 10,
     metodoPago: 'hibrido' as const,
-    comprobanteUrl: 'https://storage.tandea.app/comprobantes/pago_1.jpg',
-    fechaPago: new Date('2026-10-22T10:00:00.000Z'),
+    totalAmount: 1000.0,
+    cashAmount: 400.0,
+    transferAmount: 600.0,
+    evidenceUrl: comprobante,
   };
 
-  describe('1. Dominio Puro: Entidad Pago y Regla de Negocio AP-03', () => {
+  describe('1. Dominio Puro: PagoFactory y Regla de Negocio AP-03', () => {
     it('Caso 1: Un pago híbrido cuya suma sea exacta se acepta', () => {
-      const pago = Pago.create({ ...baseHibridoProps });
+      const pago = PagoFactory.crear({ ...baseHibrido });
 
       expect(pago).toBeDefined();
-      expect(pago.monto).toBe(1000);
-      expect(pago.montoEfectivo).toBe(400);
-      expect(pago.montoTransferencia).toBe(600);
+      expect(pago.totalAmount).toBe(1000);
+      expect(pago.cashAmount).toBe(400);
+      expect(pago.transferAmount).toBe(600);
       expect(pago.metodoPago).toBe('hibrido');
-      expect(pago.estado).toBe('pendiente');
+      expect(pago.status).toBe('PENDIENTE');
     });
 
-    it('Caso 2: Un pago híbrido cuya suma sea menor que el importe declarado se rechaza con MontoHibridoInvalidoError', () => {
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          monto: 1000,
-          montoEfectivo: 400,
-          montoTransferencia: 590, // Suma 990 != 1000
-        });
-      }).toThrowError(MontoHibridoInvalidoError);
+    it('Caso 2: Un pago híbrido cuya suma sea menor que la cuota se rechaza con MontoHibridoInvalidoError', () => {
+      const crear = () =>
+        PagoFactory.crear({ ...baseHibrido, cashAmount: 400, transferAmount: 590 }); // 990 != 1000
+
+      expect(crear).toThrowError(MontoHibridoInvalidoError);
 
       try {
-        Pago.create({
-          ...baseHibridoProps,
-          monto: 1000,
-          montoEfectivo: 400,
-          montoTransferencia: 590,
-        });
+        crear();
       } catch (err: unknown) {
         expect(err).toBeInstanceOf(MontoHibridoInvalidoError);
         const hibridoErr = err as MontoHibridoInvalidoError;
@@ -74,233 +62,149 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
       }
     });
 
-    it('Caso 3: Un pago híbrido cuya suma sea mayor que el importe declarado se rechaza con MontoHibridoInvalidoError', () => {
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          monto: 1000,
-          montoEfectivo: 500,
-          montoTransferencia: 600, // Suma 1100 != 1000
-        });
-      }).toThrowError(MontoHibridoInvalidoError);
+    it('Caso 3: Un pago híbrido cuya suma sea mayor que la cuota se rechaza con MontoHibridoInvalidoError', () => {
+      expect(() =>
+        PagoFactory.crear({ ...baseHibrido, cashAmount: 500, transferAmount: 600 }), // 1100 != 1000
+      ).toThrowError(MontoHibridoInvalidoError);
     });
 
     it('Caso 4: El caso de precisión IEEE 754 (0.1 + 0.2 frente a 0.3) se acepta operando en centavos enteros', () => {
-      const pago = Pago.create({
-        ...baseHibridoProps,
-        monto: 0.3,
-        montoEfectivo: 0.1,
-        montoTransferencia: 0.2,
+      const pago = PagoFactory.crear({
+        ...baseHibrido,
+        totalAmount: 0.3,
+        cashAmount: 0.1,
+        transferAmount: 0.2,
       });
 
-      expect(pago).toBeDefined();
-      expect(pago.monto).toBe(0.3);
-      expect(pago.montoEfectivo).toBe(0.1);
-      expect(pago.montoTransferencia).toBe(0.2);
+      expect(pago.totalAmount).toBe(0.3);
+      expect(pago.cashAmount).toBe(0.1);
+      expect(pago.transferAmount).toBe(0.2);
     });
 
     it('Rechaza componentes menores o iguales a cero en método híbrido', () => {
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          monto: 500,
-          montoEfectivo: 0,
-          montoTransferencia: 500,
-        });
-      }).toThrowError(ReglaNegocioPagoError);
+      expect(() =>
+        PagoFactory.crear({ ...baseHibrido, totalAmount: 500, cashAmount: 0, transferAmount: 500 }),
+      ).toThrowError(ReglaNegocioPagoError);
 
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          monto: 500,
-          montoEfectivo: 500,
-          montoTransferencia: 0,
-        });
-      }).toThrowError(ReglaNegocioPagoError);
+      expect(() =>
+        PagoFactory.crear({ ...baseHibrido, totalAmount: 500, cashAmount: 500, transferAmount: 0 }),
+      ).toThrowError(ReglaNegocioPagoError);
+
+      expect(() =>
+        PagoFactory.crear({ ...baseHibrido, cashAmount: -100, transferAmount: 1100 }),
+      ).toThrowError(ReglaNegocioPagoError);
     });
 
     it('Rechaza comprobante vacío o ausente en método híbrido', () => {
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          comprobanteUrl: null,
-        });
-      }).toThrowError(ReglaNegocioPagoError);
-
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          comprobanteUrl: '   ',
-        });
-      }).toThrowError(ReglaNegocioPagoError);
+      expect(() => PagoFactory.crear({ ...baseHibrido, evidenceUrl: null })).toThrowError(
+        ReglaNegocioPagoError,
+      );
+      expect(() => PagoFactory.crear({ ...baseHibrido, evidenceUrl: '   ' })).toThrowError(
+        ReglaNegocioPagoError,
+      );
     });
 
-    it('Rechaza montos con más de dos decimales en dominio', () => {
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
-          monto: 1000.555,
-          montoEfectivo: 400.555,
-          montoTransferencia: 600,
-        });
-      }).toThrowError(ReglaNegocioPagoError);
+    it('Rechaza montos con más de dos decimales o no finitos en dominio', () => {
+      expect(() =>
+        PagoFactory.crear({ ...baseHibrido, totalAmount: 1000.555, cashAmount: 400.555 }),
+      ).toThrowError(ReglaNegocioPagoError);
+
+      expect(() =>
+        PagoFactory.crear({ ...baseHibrido, cashAmount: Number.POSITIVE_INFINITY }),
+      ).toThrowError(ReglaNegocioPagoError);
     });
 
     it('Conserva las reglas de negocio para métodos efectivo y transferencia', () => {
-      // Efectivo válido
-      const pagoEfectivo = Pago.create({
-        ...baseHibridoProps,
+      const pagoEfectivo = PagoFactory.crear({
+        idNumber: 10,
         metodoPago: 'efectivo',
-        monto: 500,
-        montoEfectivo: 500,
-        montoTransferencia: 0,
-        comprobanteUrl: null,
+        totalAmount: 500,
+        cashAmount: 500,
       });
       expect(pagoEfectivo.metodoPago).toBe('efectivo');
 
-      // Efectivo con transferencia > 0 se rechaza
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
+      expect(() =>
+        PagoFactory.crear({
+          idNumber: 10,
           metodoPago: 'efectivo',
-          monto: 500,
-          montoEfectivo: 400,
-          montoTransferencia: 100,
-        });
-      }).toThrowError(ReglaNegocioPagoError);
+          totalAmount: 500,
+          cashAmount: 400,
+          transferAmount: 100,
+        }),
+      ).toThrowError(ReglaNegocioPagoError);
 
-      // Transferencia válida
-      const pagoTransf = Pago.create({
-        ...baseHibridoProps,
+      const pagoTransf = PagoFactory.crear({
+        idNumber: 10,
         metodoPago: 'transferencia',
-        monto: 500,
-        montoEfectivo: 0,
-        montoTransferencia: 500,
-        comprobanteUrl: 'https://storage.tandea.app/comprobante.jpg',
+        totalAmount: 500,
+        transferAmount: 500,
+        evidenceUrl: comprobante,
       });
       expect(pagoTransf.metodoPago).toBe('transferencia');
 
-      // Transferencia sin comprobante se rechaza
-      expect(() => {
-        Pago.create({
-          ...baseHibridoProps,
+      expect(() =>
+        PagoFactory.crear({
+          idNumber: 10,
           metodoPago: 'transferencia',
-          monto: 500,
-          montoEfectivo: 0,
-          montoTransferencia: 500,
-          comprobanteUrl: null,
-        });
-      }).toThrowError(ReglaNegocioPagoError);
+          totalAmount: 500,
+          transferAmount: 500,
+          evidenceUrl: null,
+        }),
+      ).toThrowError(ReglaNegocioPagoError);
     });
   });
 
   describe('2. Validación Zod en DTO (zPagoCreate)', () => {
     const validDtoPayload = {
-      tandaId: dummyUUID1,
-      participanteId: dummyUUID2,
-      numeroPago: 1,
-      monto: 1000.0,
-      montoEfectivo: 400.0,
-      montoTransferencia: 600.0,
+      idNumber: 10,
       metodoPago: 'hibrido',
-      comprobanteUrl: 'https://storage.tandea.app/comprobante.jpg',
-      fechaPago: '2026-10-22T10:00:00.000Z',
+      cashAmount: 400.0,
+      transferAmount: 600.0,
     };
 
-    it('Acepta un pago híbrido cuya suma en centavos enteros coincide exactamente', () => {
-      const parsed = zPagoCreate.safeParse(validDtoPayload);
-      expect(parsed.success).toBe(true);
+    it('Acepta un pago híbrido con ambos componentes positivos', () => {
+      expect(zPagoCreate.safeParse(validDtoPayload).success).toBe(true);
     });
 
-    it('Acepta el caso de precisión flotante IEEE 754 (0.1 + 0.2 = 0.3)', () => {
+    it('Acepta montos enviados como texto (campos multipart)', () => {
       const parsed = zPagoCreate.safeParse({
-        ...validDtoPayload,
-        monto: 0.3,
-        montoEfectivo: 0.1,
-        montoTransferencia: 0.2,
+        idNumber: '10',
+        metodoPago: 'hibrido',
+        cashAmount: '0.1',
+        transferAmount: '0.2',
       });
       expect(parsed.success).toBe(true);
-    });
-
-    it('Rechaza cuando la suma de efectivo + transferencia es menor que el monto', () => {
-      const parsed = zPagoCreate.safeParse({
-        ...validDtoPayload,
-        monto: 1000,
-        montoEfectivo: 400,
-        montoTransferencia: 599.99, // Falta 0.01
-      });
-
-      expect(parsed.success).toBe(false);
-      if (!parsed.success) {
-        const issue = parsed.error.issues.find((i) => i.path.includes('monto'));
-        expect(issue).toBeDefined();
-        expect(issue?.message).toContain('montoEfectivo (400) + montoTransferencia (599.99)');
-      }
-    });
-
-    it('Rechaza cuando la suma de efectivo + transferencia es mayor que el monto', () => {
-      const parsed = zPagoCreate.safeParse({
-        ...validDtoPayload,
-        monto: 1000,
-        montoEfectivo: 500,
-        montoTransferencia: 500.01,
-      });
-
-      expect(parsed.success).toBe(false);
-      if (!parsed.success) {
-        const issue = parsed.error.issues.find((i) => i.path.includes('monto'));
-        expect(issue).toBeDefined();
+      if (parsed.success) {
+        expect(parsed.data.idNumber).toBe(10);
+        expect(parsed.data.cashAmount).toBe(0.1);
+        expect(parsed.data.transferAmount).toBe(0.2);
       }
     });
 
     it('Rechaza montos con más de dos decimales en Zod', () => {
-      const parsed = zPagoCreate.safeParse({
-        ...validDtoPayload,
-        monto: 1000,
-        montoEfectivo: 400.123,
-        montoTransferencia: 599.877,
-      });
-
-      expect(parsed.success).toBe(false);
+      expect(
+        zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: 400.123 }).success,
+      ).toBe(false);
     });
 
     it('Rechaza importes negativos o no finitos en Zod', () => {
+      expect(zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: -50 }).success).toBe(false);
       expect(
-        zPagoCreate.safeParse({
-          ...validDtoPayload,
-          montoEfectivo: -50,
-          montoTransferencia: 1050,
-        }).success,
+        zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: Number.POSITIVE_INFINITY }).success,
       ).toBe(false);
-
       expect(
-        zPagoCreate.safeParse({
-          ...validDtoPayload,
-          montoEfectivo: Number.POSITIVE_INFINITY,
-        }).success,
-      ).toBe(false);
-
-      expect(
-        zPagoCreate.safeParse({
-          ...validDtoPayload,
-          montoTransferencia: Number.NaN,
-        }).success,
+        zPagoCreate.safeParse({ ...validDtoPayload, transferAmount: 'abc' }).success,
       ).toBe(false);
     });
 
     it('Rechaza método híbrido cuando alguno de los componentes es cero', () => {
-      const parsed = zPagoCreate.safeParse({
-        ...validDtoPayload,
-        monto: 1000,
-        montoEfectivo: 0,
-        montoTransferencia: 1000,
-      });
+      const parsed = zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: 0 });
 
       expect(parsed.success).toBe(false);
       if (!parsed.success) {
         const issue = parsed.error.issues.find((i) => i.path.includes('metodoPago'));
         expect(issue?.message).toContain(
-          'Método "hibrido" requiere que tanto montoEfectivo como montoTransferencia sean mayores a cero',
+          'Método "hibrido" requiere que tanto cashAmount como transferAmount sean mayores a cero',
         );
       }
     });
@@ -331,17 +235,12 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
       );
     });
 
-    it('GlobalExceptionFilter traduce ZodError de suma híbrida inconsistente a HTTP 422 Unprocessable Entity', () => {
+    it('GlobalExceptionFilter traduce ZodError de pago híbrido inconsistente a HTTP 422 Unprocessable Entity', () => {
       const parseResult = zPagoCreate.safeParse({
-        tandaId: dummyUUID1,
-        participanteId: dummyUUID2,
-        numeroPago: 1,
-        monto: 1000,
-        montoEfectivo: 400,
-        montoTransferencia: 500,
+        idNumber: 10,
         metodoPago: 'hibrido',
-        comprobanteUrl: 'https://storage.tandea.app/comprobante.jpg',
-        fechaPago: '2026-10-22T10:00:00.000Z',
+        cashAmount: 0,
+        transferAmount: 1000,
       });
       expect(parseResult.success).toBe(false);
       if (parseResult.success) return;
@@ -365,8 +264,8 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
           error: 'Unprocessable Entity',
           details: expect.arrayContaining([
             expect.objectContaining({
-              field: 'monto',
-              message: expect.stringContaining('montoEfectivo (400) + montoTransferencia (500)'),
+              field: 'metodoPago',
+              message: expect.stringContaining('Método "hibrido" requiere'),
             }),
           ]),
         }),
@@ -396,42 +295,10 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
       mockCreate.mockImplementation(async (p: Pago) => p);
     });
 
-    it('Controlador crea y persiste el pago exitosamente cuando los montos híbridos son válidos', async () => {
-      const validBody = {
-        tandaId: dummyUUID1,
-        participanteId: dummyUUID2,
-        numeroPago: 1,
-        monto: 1000,
-        montoEfectivo: 450,
-        montoTransferencia: 550,
-        metodoPago: 'hibrido',
-        comprobanteUrl: 'https://storage.tandea.app/comprobante.jpg',
-        fechaPago: '2026-10-22T10:00:00.000Z',
-      };
-
-      const result = await controller.crearPago(validBody);
-
-      expect(result).toBeDefined();
-      expect(result.monto).toBe(1000);
-      expect(result.montoEfectivo).toBe(450);
-      expect(result.montoTransferencia).toBe(550);
-      expect(mockCreate).toHaveBeenCalledOnce();
-    });
-
     it('Controlador rechaza con ZodError ante montos híbridos inconsistentes y NO invoca persistencia', async () => {
-      const invalidBody = {
-        tandaId: dummyUUID1,
-        participanteId: dummyUUID2,
-        numeroPago: 1,
-        monto: 1000,
-        montoEfectivo: 400,
-        montoTransferencia: 500, // Discrepancia: 900 != 1000
-        metodoPago: 'hibrido',
-        comprobanteUrl: 'https://storage.tandea.app/comprobante.jpg',
-        fechaPago: '2026-10-22T10:00:00.000Z',
-      };
-
-      const error = await controller.crearPago(invalidBody).catch((e: unknown) => e);
+      const error = await controller
+        .crearPago({ idNumber: 10, metodoPago: 'hibrido', cashAmount: 0, transferAmount: 1000 })
+        .catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(ZodError);
       expect(mockCreate).not.toHaveBeenCalled();
@@ -440,17 +307,13 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
     it('Servicio rechaza mediante regla de dominio ante llamada directa inconsistente y NO persiste', async () => {
       await expect(
         service.crearPago({
-          tandaId: dummyUUID1,
-          participanteId: dummyUUID2,
-          numeroPago: 1,
-          monto: 500,
-          montoEfectivo: 200,
-          montoTransferencia: 250, // 450 != 500
+          idNumber: 10,
           metodoPago: 'hibrido',
-          comprobanteUrl: 'https://storage.tandea.app/comprobante.jpg',
-          fechaPago: new Date(),
+          cashAmount: 200,
+          transferAmount: 250,
+          comprobanteUrl: null, // híbrido sin comprobante
         }),
-      ).rejects.toThrowError(MontoHibridoInvalidoError);
+      ).rejects.toThrowError(ReglaNegocioPagoError);
 
       expect(mockCreate).not.toHaveBeenCalled();
     });

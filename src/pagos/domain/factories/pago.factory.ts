@@ -1,5 +1,6 @@
 import { Pago, MetodoPago } from '../entities/Pago';
-import { ReglaNegocioPagoError } from '../errors/pago.errors';
+import { MontoHibridoInvalidoError, ReglaNegocioPagoError } from '../errors/pago.errors';
+import { esMontoMonetarioValido, sumarCentavosExactos, toCentavos } from '../utils/moneda.util';
 
 export interface CrearPagoFactoryDto {
   idPayment?: number;
@@ -36,6 +37,7 @@ export interface CrearPagoFactoryDto {
  *    * Efectivo: 100% efectivo, 0 transferencia, comprobante opcional.
  *    * Transferencia: 100% transferencia, 0 efectivo, comprobante obligatorio.
  *    * Híbrido: efectivo > 0, transferencia > 0, suma == cuota, comprobante obligatorio.
+ *  - Todas las comparaciones de montos se hacen en centavos enteros (nunca con floats).
  *  - NO contiene dependencias de frameworks (@nestjs, etc.).
  */
 export class PagoFactory {
@@ -69,6 +71,10 @@ export class PagoFactory {
     const rawTransfer = dto.transferAmount ?? dto.montoTransferencia;
     const rawCash = dto.cashAmount ?? dto.montoEfectivo;
 
+    PagoFactory.validarMonto(rawTotal, 'La cuota total');
+    PagoFactory.validarMonto(rawTransfer, 'El monto de transferencia');
+    PagoFactory.validarMonto(rawCash, 'El monto en efectivo');
+
     const rawEvidence = dto.evidenceUrl ?? dto.fileUrl ?? dto.comprobanteUrl ?? null;
     const cleanEvidence =
       typeof rawEvidence === 'string' && rawEvidence.trim().length > 0
@@ -96,7 +102,7 @@ export class PagoFactory {
         }
 
         if (rawTotal !== undefined && rawCash !== undefined) {
-          if (Math.abs(rawCash - rawTotal) > 0.009) {
+          if (toCentavos(rawCash) !== toCentavos(rawTotal)) {
             throw new ReglaNegocioPagoError(
               `El monto en efectivo (${rawCash}) debe coincidir con la cuota total (${rawTotal})`,
             );
@@ -124,7 +130,7 @@ export class PagoFactory {
         }
 
         if (rawTotal !== undefined && rawTransfer !== undefined) {
-          if (Math.abs(rawTransfer - rawTotal) > 0.009) {
+          if (toCentavos(rawTransfer) !== toCentavos(rawTotal)) {
             throw new ReglaNegocioPagoError(
               `El monto de transferencia (${rawTransfer}) debe coincidir con la cuota total (${rawTotal})`,
             );
@@ -156,12 +162,10 @@ export class PagoFactory {
           );
         }
 
-        const sum = Number((rawTransfer + rawCash).toFixed(2));
+        const sum = (toCentavos(rawTransfer) + toCentavos(rawCash)) / 100;
         if (rawTotal !== undefined) {
-          if (Math.abs(sum - rawTotal) > 0.009) {
-            throw new ReglaNegocioPagoError(
-              `La suma de efectivo (${rawCash}) y transferencia (${rawTransfer}) = ${sum} debe coincidir exactamente con la cuota total (${rawTotal})`,
-            );
+          if (!sumarCentavosExactos(rawCash, rawTransfer, rawTotal)) {
+            throw new MontoHibridoInvalidoError(rawCash, rawTransfer, sum, rawTotal);
           }
           finalTotal = Number(rawTotal.toFixed(2));
         } else {
@@ -206,5 +210,16 @@ export class PagoFactory {
       participanteId: dto.participanteId,
       numeroPago: dto.numeroPago,
     });
+  }
+
+  /**
+   * Rechaza montos no finitos, negativos o con fracciones de centavo.
+   */
+  private static validarMonto(valor: number | undefined, campo: string): void {
+    if (valor !== undefined && !esMontoMonetarioValido(valor)) {
+      throw new ReglaNegocioPagoError(
+        `${campo} debe ser un número finito no negativo con máximo 2 decimales`,
+      );
+    }
   }
 }

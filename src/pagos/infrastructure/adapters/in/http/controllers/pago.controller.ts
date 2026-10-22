@@ -5,7 +5,7 @@ import {
   Patch,
   Body,
   Param,
-  ParseUUIDPipe,
+  ParseIntPipe,
   HttpCode,
   HttpStatus,
   UseFilters,
@@ -53,15 +53,11 @@ export class PagoController {
     const dto: CreatePagoDto = zPagoCreate.parse(body);
 
     const pago = await this.pagoService.crearPago({
-      tandaId: dto.tandaId,
-      participanteId: dto.participanteId,
-      numeroPago: dto.numeroPago,
-      monto: dto.monto,
-      montoEfectivo: dto.montoEfectivo,
-      montoTransferencia: dto.montoTransferencia,
+      idNumber: dto.idNumber,
       metodoPago: dto.metodoPago,
+      transferAmount: dto.transferAmount,
+      cashAmount: dto.cashAmount,
       comprobanteUrl: dto.comprobanteUrl,
-      fechaPago: dto.fechaPago,
     });
 
     return zPagoResponse.parse(toResponseDto(pago));
@@ -73,7 +69,7 @@ export class PagoController {
 
   @Get(':id')
   async obtenerPago(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ): Promise<PagoResponseDto> {
     const pago = await this.pagoService.obtenerPago(id);
     return zPagoResponse.parse(toResponseDto(pago));
@@ -85,7 +81,7 @@ export class PagoController {
 
   @Patch(':id/confirmar-organizador')
   async confirmarOrganizador(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ): Promise<PagoResponseDto> {
     const pago = await this.pagoService.confirmarOrganizador(id);
     return zPagoResponse.parse(toResponseDto(pago));
@@ -97,7 +93,7 @@ export class PagoController {
 
   @Patch(':id/confirmar-receptor')
   async confirmarReceptor(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ): Promise<PagoResponseDto> {
     const pago = await this.pagoService.confirmarReceptor(id);
     return zPagoResponse.parse(toResponseDto(pago));

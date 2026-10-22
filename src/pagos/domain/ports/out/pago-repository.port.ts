@@ -1,4 +1,4 @@
-import { Pago } from '../../entities/pago.entity';
+import { Pago } from '../../entities/Pago';
 
 /**
  * Token de Inyección de Dependencias para el puerto del Repositorio de Pagos.
@@ -15,14 +15,15 @@ export const PAGO_REPOSITORY_PORT = Symbol('PAGO_REPOSITORY_PORT');
  */
 export interface PagoRepositoryPort {
   /**
-   * Persiste un nuevo pago en el almacenamiento secundario.
+   * Persiste un nuevo pago (tabla `payment`) y, si trae comprobante,
+   * su fila en `evidence`, ambos en una sola transacción.
    */
   create(pago: Pago): Promise<Pago>;
 
   /**
-   * Busca un pago por su identificador único UUID.
+   * Busca un pago por su identificador (`id_payment`).
    */
-  findById(id: string): Promise<Pago | null>;
+  findById(idPayment: number): Promise<Pago | null>;
 
   /**
    * Actualiza el estado y datos de una entidad Pago existente.
