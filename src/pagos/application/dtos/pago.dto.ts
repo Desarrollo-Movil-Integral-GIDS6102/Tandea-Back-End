@@ -33,9 +33,10 @@ const zMontoOpcional = (campo: string) =>
 
 // ─────────────────────────────────────────────
 // DTO de ENTRADA — Registrar un Pago (AP-03)
+// Campos de texto del multipart/form-data; el archivo viaja en `file`.
 // ─────────────────────────────────────────────
 
-export const zPagoCreate = z
+export const zRegistrarPago = z
   .object({
     idNumber: z.coerce
       .number({ invalid_type_error: 'idNumber debe ser un número' })
@@ -44,11 +45,6 @@ export const zPagoCreate = z
     metodoPago: zMetodoPago,
     transferAmount: zMontoOpcional('transferAmount'),
     cashAmount: zMontoOpcional('cashAmount'),
-    comprobanteUrl: z
-      .string()
-      .url({ message: 'El comprobante debe ser una URL válida' })
-      .nullable()
-      .default(null),
   })
   .superRefine((data, ctx) => {
     // Consistencia método/montos (la suma contra la cuota se valida en el dominio)
@@ -79,7 +75,7 @@ export const zPagoCreate = z
     }
   });
 
-export type CreatePagoDto = z.infer<typeof zPagoCreate>;
+export type RegistrarPagoDto = z.infer<typeof zRegistrarPago>;
 
 // ─────────────────────────────────────────────
 // DTO de SALIDA — Respuesta de un Pago

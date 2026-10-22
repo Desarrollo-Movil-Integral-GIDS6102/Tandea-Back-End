@@ -9,6 +9,10 @@ import {
   DomainError,
   PagoNotFoundError,
   MontoHibridoInvalidoError,
+  NumeroNoEncontradoError,
+  TandaNoEncontradaError,
+  NumeroAjenoError,
+  PagoDuplicadoError,
 } from '../../../../../domain/errors/pago.errors';
 
 /**
@@ -28,9 +32,19 @@ export class PagoDomainExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.UNPROCESSABLE_ENTITY;
     let error = 'Unprocessable Entity';
 
-    if (exception instanceof PagoNotFoundError) {
+    if (
+      exception instanceof PagoNotFoundError ||
+      exception instanceof NumeroNoEncontradoError ||
+      exception instanceof TandaNoEncontradaError
+    ) {
       status = HttpStatus.NOT_FOUND;
       error = 'Not Found';
+    } else if (exception instanceof NumeroAjenoError) {
+      status = HttpStatus.FORBIDDEN;
+      error = 'Forbidden';
+    } else if (exception instanceof PagoDuplicadoError) {
+      status = HttpStatus.CONFLICT;
+      error = 'Conflict';
     } else if (exception instanceof MontoHibridoInvalidoError) {
       status = HttpStatus.UNPROCESSABLE_ENTITY;
       error = 'Unprocessable Entity';

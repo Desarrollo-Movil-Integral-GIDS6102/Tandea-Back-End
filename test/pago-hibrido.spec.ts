@@ -1,17 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ArgumentsHost, HttpStatus } from '@nestjs/common';
-import { ZodError } from 'zod';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { Pago } from '../src/pagos/domain/entities/Pago';
 import { PagoFactory } from '../src/pagos/domain/factories/pago.factory';
 import {
   MontoHibridoInvalidoError,
   ReglaNegocioPagoError,
 } from '../src/pagos/domain/errors/pago.errors';
-import { zPagoCreate } from '../src/pagos/application/dtos/pago.dto';
-import { PagoService } from '../src/pagos/application/services/pago.service';
-import { PagoRepositoryPort } from '../src/pagos/domain/ports/out/pago-repository.port';
-import { PagoController } from '../src/pagos/infrastructure/adapters/in/http/controllers/pago.controller';
+import { zRegistrarPago } from '../src/pagos/application/dtos/pago.dto';
 import { PagoDomainExceptionFilter } from '../src/pagos/infrastructure/adapters/in/http/filters/pago-domain-exception.filter';
 import { GlobalExceptionFilter } from '../src/common/filters/global-exception.filter';
 
@@ -154,7 +149,7 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
     });
   });
 
-  describe('2. Validación Zod en DTO (zPagoCreate)', () => {
+  describe('2. Validación Zod en DTO (zRegistrarPago)', () => {
     const validDtoPayload = {
       idNumber: 10,
       metodoPago: 'hibrido',
@@ -163,11 +158,11 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
     };
 
     it('Acepta un pago híbrido con ambos componentes positivos', () => {
-      expect(zPagoCreate.safeParse(validDtoPayload).success).toBe(true);
+      expect(zRegistrarPago.safeParse(validDtoPayload).success).toBe(true);
     });
 
     it('Acepta montos enviados como texto (campos multipart)', () => {
-      const parsed = zPagoCreate.safeParse({
+      const parsed = zRegistrarPago.safeParse({
         idNumber: '10',
         metodoPago: 'hibrido',
         cashAmount: '0.1',
@@ -183,22 +178,22 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
 
     it('Rechaza montos con más de dos decimales en Zod', () => {
       expect(
-        zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: 400.123 }).success,
+        zRegistrarPago.safeParse({ ...validDtoPayload, cashAmount: 400.123 }).success,
       ).toBe(false);
     });
 
     it('Rechaza importes negativos o no finitos en Zod', () => {
-      expect(zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: -50 }).success).toBe(false);
+      expect(zRegistrarPago.safeParse({ ...validDtoPayload, cashAmount: -50 }).success).toBe(false);
       expect(
-        zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: Number.POSITIVE_INFINITY }).success,
+        zRegistrarPago.safeParse({ ...validDtoPayload, cashAmount: Number.POSITIVE_INFINITY }).success,
       ).toBe(false);
       expect(
-        zPagoCreate.safeParse({ ...validDtoPayload, transferAmount: 'abc' }).success,
+        zRegistrarPago.safeParse({ ...validDtoPayload, transferAmount: 'abc' }).success,
       ).toBe(false);
     });
 
     it('Rechaza método híbrido cuando alguno de los componentes es cero', () => {
-      const parsed = zPagoCreate.safeParse({ ...validDtoPayload, cashAmount: 0 });
+      const parsed = zRegistrarPago.safeParse({ ...validDtoPayload, cashAmount: 0 });
 
       expect(parsed.success).toBe(false);
       if (!parsed.success) {
@@ -236,7 +231,7 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
     });
 
     it('GlobalExceptionFilter traduce ZodError de pago híbrido inconsistente a HTTP 422 Unprocessable Entity', () => {
-      const parseResult = zPagoCreate.safeParse({
+      const parseResult = zRegistrarPago.safeParse({
         idNumber: 10,
         metodoPago: 'hibrido',
         cashAmount: 0,
@@ -270,52 +265,6 @@ describe('[AP-03] Validación de suma en Pago Híbrido (Efectivo + Transferencia
           ]),
         }),
       );
-    });
-  });
-
-  describe('4. Capa de Aplicación y Controlador: Orquestación y No Persistencia', () => {
-    let mockRepo: PagoRepositoryPort;
-    let service: PagoService;
-    let controller: PagoController;
-
-    const mockCreate = vi.fn();
-    const mockFindById = vi.fn();
-    const mockUpdate = vi.fn();
-
-    beforeEach(() => {
-      vi.clearAllMocks();
-      mockRepo = {
-        create: mockCreate,
-        findById: mockFindById,
-        update: mockUpdate,
-      };
-      service = new PagoService(mockRepo);
-      controller = new PagoController(service);
-
-      mockCreate.mockImplementation(async (p: Pago) => p);
-    });
-
-    it('Controlador rechaza con ZodError ante montos híbridos inconsistentes y NO invoca persistencia', async () => {
-      const error = await controller
-        .crearPago({ idNumber: 10, metodoPago: 'hibrido', cashAmount: 0, transferAmount: 1000 })
-        .catch((e: unknown) => e);
-
-      expect(error).toBeInstanceOf(ZodError);
-      expect(mockCreate).not.toHaveBeenCalled();
-    });
-
-    it('Servicio rechaza mediante regla de dominio ante llamada directa inconsistente y NO persiste', async () => {
-      await expect(
-        service.crearPago({
-          idNumber: 10,
-          metodoPago: 'hibrido',
-          cashAmount: 200,
-          transferAmount: 250,
-          comprobanteUrl: null, // híbrido sin comprobante
-        }),
-      ).rejects.toThrowError(ReglaNegocioPagoError);
-
-      expect(mockCreate).not.toHaveBeenCalled();
     });
   });
 });

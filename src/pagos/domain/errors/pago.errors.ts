@@ -90,6 +90,12 @@ export class PagoRechazadoError extends DomainError {
   }
 }
 
+export class ComprobanteRequeridoError extends ReglaNegocioPagoError {
+  constructor(metodoPago: string) {
+    super(`El pago por "${metodoPago}" requiere adjuntar el comprobante en el campo "file"`);
+  }
+}
+
 /**
  * Error lanzado cuando la suma de montoEfectivo y montoTransferencia
  * no coincide exactamente con el monto total declarado en un pago híbrido (AP-03).
