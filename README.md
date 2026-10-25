@@ -151,35 +151,30 @@ Tandea-Back-End/
 │   ├── tandas/                             # Módulo funcional de Tandas (Arquitectura Hexagonal)
 │   │   ├── domain/                         # 1. NÚCLEO: Dominio puro
 │   │   │   ├── entities/
-│   │   │   │   ├── tanda.entity.ts         # Entidad rica Tanda (validaciones, estados)
-│   │   │   │   └── numero-tanda.entity.ts  # Entidad rica NumeroTanda (asignación atómica AP-02)
+│   │   │   │   └── tanda.entity.ts         # Entidad rica Tanda (validaciones, estados)
 │   │   │   ├── errors/
 │   │   │   │   ├── tanda.errors.ts         # DomainError y PlanTandaInvalidoError
-│   │   │   │   └── numero.errors.ts        # NumeroYaTomadoError, NumeroMuertoNoElegibleError, etc.
+│   │   │   │   └── numero.errors.ts        # NumeroYaTomadoError (turno ya tomado, 409)
 │   │   │   ├── services/
 │   │   │   │   └── calcular-plan.ts        # Cálculo puro de plan financiero y turnos (AP-01)
 │   │   │   └── ports/
 │   │   │       ├── in/
 │   │   │       │   ├── tanda-use-cases.port.ts
-│   │   │       │   ├── create-tanda-use-case.port.ts
-│   │   │       │   └── elegir-numero-use-case.port.ts
+│   │   │       │   └── create-tanda-use-case.port.ts
 │   │   │       └── out/
 │   │   │           ├── tanda-repository.port.ts
 │   │   │           └── number-repository.port.ts
 │   │   ├── application/                    # 2. APLICACIÓN: Orquestación
 │   │   │   ├── dtos/
 │   │   │   └── services/
-│   │   │       ├── tanda.service.ts
-│   │   │       └── elegir-numero.service.ts
+│   │   │       └── tanda.service.ts
 │   │   ├── infrastructure/                 # 3. INFRAESTRUCTURA: Adaptadores
 │   │   │   └── adapters/
 │   │   │       ├── in/http/
 │   │   │       │   ├── tanda.controller.ts
 │   │   │       │   └── filters/
-│   │   │       │       └── tanda-domain-exception.filter.ts # DomainError ➔ 404/409/400/422
+│   │   │       │       └── tanda-domain-exception.filter.ts # DomainError ➔ 409/400/422
 │   │   │       └── out/database/
-│   │   │           ├── mappers/
-│   │   │           │   └── numero.mapper.ts
 │   │   │           └── drizzle-tanda.repository.ts # Implementa TandaRepositoryPort y NumberRepositoryPort
 │   │   └── tanda.module.ts                 # NestJS Module conectando puertos y adaptadores
 │   ├── app.controller.ts                   # Controlador de salud/bienvenida

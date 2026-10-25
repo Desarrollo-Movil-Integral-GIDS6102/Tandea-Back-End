@@ -118,17 +118,6 @@ describe.skipIf(!testDbUrl)('Asignación concurrente de números en base de dato
       })
       .returning({ idTanda: tandaTable.idTanda });
     idTanda = tanda.idTanda;
-
-    // 5. Pre-insertar el turno 1 libre (id_user = null)
-    await db.insert(numberTable).values({
-      idTanda,
-      roundNumber: 1,
-      numberValue: 1,
-      idUser: null,
-      isDeadNumber: false,
-      status: 'PENDIENTE',
-      active: true,
-    });
   });
 
   afterAll(async () => {
@@ -149,26 +138,21 @@ describe.skipIf(!testDbUrl)('Asignación concurrente de números en base de dato
     }
   });
 
-  it('lanza dos asignaciones simultáneas del mismo número con Promise.all y verifica que exactamente una tenga éxito y la otra reciba NumeroYaTomadoError', async () => {
-    // Disparar las dos promesas simultáneamente compitiendo por el número 1 en la vuelta 1
-    const results = await Promise.allSettled([
-      repository.asignarSiLibre(idTanda, 1, 1, userAId),
-      repository.asignarSiLibre(idTanda, 1, 1, userBId),
-    ]);
+  it('al unirse, dos personas que eligen el mismo turno a la vez: una entra y la otra recibe NumeroYaTomadoError', async () => {
+    const nuevoNumero = (idUser: number) =>
+      repository.createNumber({
+        idTanda,
+        roundNumber: 1,
+        numberValue: 1,
+        idUser,
+        isDeadNumber: false,
+        status: 'PENDIENTE',
+      });
 
-    const exitosos = results.filter((r) => r.status === 'fulfilled');
-    const fallidos = results.filter((r) => r.status === 'rejected');
+    const results = await Promise.allSettled([nuevoNumero(userAId), nuevoNumero(userBId)]);
 
-    // Exactamente una promesa debe haber tenido éxito y la otra fallado
-    expect(exitosos).toHaveLength(1);
-    expect(fallidos).toHaveLength(1);
-
-    // La promesa rechazada debe contener específicamente NumeroYaTomadoError
-    const motivoFallo = (fallidos[0] as PromiseRejectedResult).reason;
-    expect(motivoFallo).toBeInstanceOf(NumeroYaTomadoError);
-
-    // Verificar en base de datos que el número quedó asignado al ganador
-    const ganador = (exitosos[0] as PromiseFulfilledResult<any>).value;
-    expect([userAId, userBId]).toContain(ganador.idUser);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const fallido = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(fallido.reason).toBeInstanceOf(NumeroYaTomadoError);
   });
 });
