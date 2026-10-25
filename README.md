@@ -12,10 +12,11 @@ Backend del sistema **Tandea**, una plataforma moderna para la administración y
 5. [Guía de Inicio y Puesta en Marcha](#-guía-de-inicio-y-puesta-en-marcha)
 6. [Variables de Entorno](#-variables-de-entorno)
 7. [Scripts Disponibles](#-scripts-disponibles)
-8. [Especificación de la API (Endpoints)](#-especificación-de-la-api-endpoints)
-9. [Reglas de Negocio del Dominio](#-reglas-de-negocio-del-dominio)
-10. [Instrucciones Críticas para Asistentes de IA y Desarrolladores](#-instrucciones-críticas-para-asistentes-de-ia-y-desarrolladores)
-11. [Despliegue en Railway](#-despliegue-en-railway)
+8. [Integración Continua (GitHub Actions)](#-integración-continua-github-actions)
+9. [Especificación de la API (Endpoints)](#-especificación-de-la-api-endpoints)
+10. [Reglas de Negocio del Dominio](#-reglas-de-negocio-del-dominio)
+11. [Instrucciones Críticas para Asistentes de IA y Desarrolladores](#-instrucciones-críticas-para-asistentes-de-ia-y-desarrolladores)
+12. [Despliegue en Railway](#-despliegue-en-railway)
 
 ---
 
@@ -325,6 +326,25 @@ npm run test:e2e
 TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/tandea_dev" npm run test:e2e
 ```
 
+
+---
+
+## 🔁 Integración Continua (GitHub Actions)
+
+El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada Pull Request y en cada push a `main` y `develop`. Un PR solo debe mergearse con todos los jobs en verde.
+
+| Job | Qué hace |
+| :--- | :--- |
+| **Lint, build y pruebas** | `npm ci`, `npm run lint`, `npm run build` y `npm test` con Node 22. |
+| **Pruebas de integración (PostgreSQL)** | Levanta un `postgres:16` temporal en el runner, aplica las migraciones (`npm run db:migrate`) y corre `test/number-unique.e2e-spec.ts` y `test/numero-concurrencia.e2e-spec.ts`. |
+
+* La base de datos del CI se crea y se destruye en cada ejecución; **nunca** se conecta a Railway y no usa secretos del repositorio.
+* `test/app.e2e-spec.ts` no se ejecuta en CI: usa la plataforma Express, que el proyecto (Fastify) no instala.
+* Para reproducir el primer job en local antes de abrir un PR:
+
+```bash
+npm ci && npm run lint && npm run build && npm test
+```
 
 ---
 
