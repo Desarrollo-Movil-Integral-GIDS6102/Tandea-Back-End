@@ -25,7 +25,7 @@ Backend del sistema **Tandea**, una plataforma moderna para la administración y
 Tandea digitaliza la gestión de tandas tradicionales:
 * **Gestión de rondas y participantes:** Asignación de turnos y números de pago.
 * **Control de pagos multicanal:** Pagos en efectivo, por transferencia o híbridos.
-* **Flujo de doble confirmación:** Garantía de entrega donde primero confirma el **organizador** y posteriormente confirma el **receptor** (ganador del turno).
+* **Flujo de doble confirmación del pago:** el **participante** confirma al registrar su pago y el **organizador** lo confirma al validar que recibió el dinero. La confirmación del **receptor** (ganador del turno) pertenece a la entrega del dinero (`payout`, módulo de entregas).
 * **Validación de comprobantes con OCR:** Comparación automática del comprobante bancario contra el monto esperado.
 
 El backend está optimizado para alta concurrencia y bajo consumo de recursos utilizando **Fastify** como motor HTTP.
@@ -86,7 +86,7 @@ El sistema separa estrictamente la lógica del negocio de los detalles técnicos
 ### Principios Fundamentales:
 1. **Dominio Agnóstico (`src/<modulo>/domain`):**
    - TypeScript puro. **Prohibido importar `@nestjs/*`, `fastify`, `drizzle-orm` o paquetes de transporte/persistencia.**
-   - Las entidades encapsulan estado y métodos de negocio (`confirmarPorOrganizador()`, `confirmarPorReceptor()`, etc.).
+   - Las entidades encapsulan estado y métodos de negocio (`confirmarPorParticipante()`, `confirmarPorOrganizador()`, etc.).
    - Lanza errores puros que heredan de `DomainError` (ej. `PagoYaConfirmadoError`).
 2. **Puertos (`domain/ports/`):**
    - **Inbound Ports (`ports/in/`):** Interfaces que exponen los casos de uso disponibles (`PagoUseCasesPort`).
@@ -423,83 +423,83 @@ Todas las rutas tienen el prefijo global: **`/api/v1`**.
 #### 1. Registrar Pago
 * **Método:** `POST`
 * **Ruta:** `/api/v1/pagos`
-* **Estado Exitoso:** `201 Created`
-* **Cuerpo de la Petición (`Content-Type: application/json`):**
-```json
-{
-  "tandaId": "d3b07384-d113-4e89-a5e2-636a2829ec37",
-  "participanteId": "a2c145e8-5b43-4217-bf39-847291a1829e",
-  "numeroPago": 1,
-  "monto": 1000.00,
-  "montoEfectivo": 400.00,
-  "montoTransferencia": 600.00,
-  "metodoPago": "hibrido",
-  "comprobanteUrl": "https://storage.tandea.app/comprobantes/pago_1.jpg",
-  "fechaPago": "2026-10-05T16:00:00.000Z"
-}
+* **Cabecera requerida:** `Authorization: Bearer <token>` (el número debe pertenecer al usuario del token)
+* **Cuerpo de la Petición (`Content-Type: multipart/form-data`):**
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `idNumber` | entero | Número (turno) del participante que paga. La cuota se toma de su tanda. |
+| `metodoPago` | texto | `efectivo`, `transferencia` o `hibrido`. |
+| `transferAmount` | número | Monto por transferencia (máx. 2 decimales). |
+| `cashAmount` | número | Monto en efectivo (máx. 2 decimales). |
+| `file` | archivo | Comprobante JPG, PNG o PDF de hasta 10 MB. Obligatorio en `transferencia` e `hibrido`. |
+
+```bash
+curl -X POST {{baseUrl}}/pagos   -H "Authorization: Bearer <token>"   -F idNumber=12 -F metodoPago=hibrido   -F transferAmount=600 -F cashAmount=400   -F file=@spei.png
 ```
 * **Respuesta (`201 Created`):**
 ```json
 {
-  "id": "78b4081c-811c-43f1-b847-f3c1bc91703d",
-  "tandaId": "d3b07384-d113-4e89-a5e2-636a2829ec37",
-  "participanteId": "a2c145e8-5b43-4217-bf39-847291a1829e",
-  "numeroPago": 1,
-  "monto": 1000,
-  "montoEfectivo": 400,
-  "montoTransferencia": 600,
+  "idPayment": 45,
+  "idNumber": 12,
   "metodoPago": "hibrido",
-  "estado": "pendiente",
-  "comprobanteUrl": "https://storage.tandea.app/comprobantes/pago_1.jpg",
-  "montoOcrValidado": null,
-  "ocrAprobado": null,
-  "confirmadoOrganizadorEn": null,
-  "confirmadoReceptorEn": null,
-  "fechaPago": "2026-10-05T16:00:00.000Z",
+  "transferAmount": 600,
+  "cashAmount": 400,
+  "totalAmount": 1000,
+  "status": "PENDIENTE",
+  "confirmedByParticipant": true,
+  "confirmedByAdmin": false,
+  "ocrVerified": false,
+  "ocrDetectedAmount": null,
+  "evidenceUrl": "https://res.cloudinary.com/<cloud>/image/upload/comprobantes/pago_numero_12_1760000000000.png",
   "createdAt": "2026-10-05T16:20:00.000Z",
   "updatedAt": "2026-10-05T16:20:00.000Z"
 }
 ```
+* **Errores:**
+  - `400 Bad Request`: El comprobante no es JPG, PNG o PDF, o está vacío.
+  - `403 Forbidden`: El número no pertenece al usuario del token (`NumeroAjenoError`).
+  - `404 Not Found`: El número o su tanda no existen.
+  - `409 Conflict`: Ya hay un pago pendiente o confirmado para ese número (`PagoDuplicadoError`).
+  - `413 Payload Too Large`: El comprobante pesa más de 10 MB.
+  - `422 Unprocessable Entity`: Campos inválidos, la suma no coincide con la cuota o falta el comprobante.
 
 #### 2. Obtener Pago por ID
 * **Método:** `GET`
 * **Ruta:** `/api/v1/pagos/:id`
-* **Parámetros:** `:id` (UUID)
+* **Parámetros:** `:id` (entero, `idPayment`)
 * **Respuestas:**
-  - `200 OK`: Retorna el objeto `PagoResponseDto`.
+  - `200 OK`: Retorna el objeto `PagoResponseDto` (mismos campos que la respuesta de registro).
   - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
 
-#### 3. Confirmación del Organizador (1ra Confirmación)
+#### 3. Confirmación del Organizador
 * **Método:** `PATCH`
 * **Ruta:** `/api/v1/pagos/:id/confirmar-organizador`
-* **Descripción:** El organizador valida que recibió el pago en efectivo o verificó la transferencia.
-* **Transición de Estado:** Pasa de `pendiente` a `confirmado_parcial`.
+* **Cabecera requerida:** `Authorization: Bearer <token>` del **organizador** de la tanda (`tanda.id_admin`).
+* **Descripción:** El organizador valida que recibió el pago en efectivo o verificó la transferencia. El participante ya confirmó al registrar el pago (`confirmed_by_participant = true`), así que esta confirmación cierra la doble confirmación.
+* **Transición de Estado:** Pasa de `PENDIENTE` a `CONFIRMADO` (`confirmed_by_admin = true`).
 * **Respuestas:**
   - `200 OK`: Retorna el pago actualizado.
-  - `422 Unprocessable Entity`: Si el pago ya fue confirmado previamente o ya está completamente cerrado.
+  - `403 Forbidden`: Quien llama no es el organizador de la tanda (`NoEsOrganizadorError`).
+  - `404 Not Found`: Si el pago no existe.
+  - `422 Unprocessable Entity`: Si el pago ya fue confirmado previamente o fue rechazado.
 
-#### 4. Confirmación del Receptor (2da Confirmación)
-* **Método:** `PATCH`
-* **Ruta:** `/api/v1/pagos/:id/confirmar-receptor`
-* **Descripción:** El receptor (ganador de la tanda) confirma la recepción del dinero.
-* **Transición de Estado:** Pasa a `confirmado`.
-* **Regla estricta:** El organizador **debe haber confirmado primero**. De lo contrario retorna `422 Unprocessable Entity`.
+> La confirmación de recepción por el ganador del turno no es parte del pago: se registra en la entrega del dinero (tabla `payout`, columnas `confirmed_by_admin` y `confirmed_by_recipient`), en el módulo de entregas (AP-07).
 
 ---
 
 ## ⚖ Reglas de Negocio del Dominio
 
 1. **Métodos de Pago:**
-   - `'efectivo'`: `montoEfectivo` debe ser igual a `monto`. `montoTransferencia` debe ser `0`.
-   - `'transferencia'`: `montoTransferencia` debe ser igual a `monto`. `montoEfectivo` debe ser `0`. `comprobanteUrl` es **obligatorio**.
-   - `'hibrido'`: `montoEfectivo > 0` y `montoTransferencia > 0`, ambos con un máximo de 2 decimales y su suma exacta comparada en **centavos enteros** debe igualar a `monto`. `comprobanteUrl` es **obligatorio**. Si la suma discrepa o los montos son inválidos, se rechaza con `HTTP 422 Unprocessable Entity` (AP-03).
+   - `'efectivo'`: `cashAmount` debe ser igual a la cuota de la tanda. `transferAmount` debe ser `0`. El comprobante es opcional.
+   - `'transferencia'`: `transferAmount` debe ser igual a la cuota. `cashAmount` debe ser `0`. El comprobante (`file`) es **obligatorio**.
+   - `'hibrido'`: `cashAmount > 0` y `transferAmount > 0`, ambos con un máximo de 2 decimales y su suma exacta comparada en **centavos enteros** debe igualar la cuota. El comprobante (`file`) es **obligatorio**. Si la suma discrepa o los montos son inválidos, se rechaza con `HTTP 422 Unprocessable Entity` (AP-03).
 2. **Ciclo de Vida y Estados del Pago:**
-   - `pendiente`: Estado inicial al registrar el pago.
-   - `confirmado_parcial`: El organizador confirmó la recepción del aporte.
-   - `confirmado`: Ambos (organizador y receptor) confirmaron. El pago está completado y liquidado.
-   - `rechazado`: Comprobante fraudulento o discrepancia de fondos.
+   - `PENDIENTE`: Estado inicial al registrar el pago (el participante ya confirmó; falta el organizador).
+   - `CONFIRMADO`: Participante y organizador confirmaron. El pago está completado.
+   - `RECHAZADO`: Comprobante fraudulento o discrepancia de fondos.
 3. **Tolerancia OCR:**
-   - Al comparar el monto detectado en la imagen bancaria contra `montoTransferencia`, se aplica una tolerancia de `±1.00 MXN` para admitir posibles variaciones de redondeo o comisión bancaria.
+   - Al comparar el monto detectado en la imagen bancaria contra `transferAmount`, se aplica una tolerancia de `±1.00 MXN` para admitir posibles variaciones de redondeo o comisión bancaria.
 
 ---
 

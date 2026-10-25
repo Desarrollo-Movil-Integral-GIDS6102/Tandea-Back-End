@@ -103,20 +103,9 @@ export class PagoController {
   @Patch(':id/confirmar-organizador')
   async confirmarOrganizador(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PagoResponseDto> {
-    const pago = await this.pagoService.confirmarOrganizador(id);
-    return zPagoResponse.parse(toResponseDto(pago));
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PATCH /pagos/:id/confirmar-receptor
-  // ─────────────────────────────────────────────────────────────────────────
-
-  @Patch(':id/confirmar-receptor')
-  async confirmarReceptor(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<PagoResponseDto> {
-    const pago = await this.pagoService.confirmarReceptor(id);
+    const pago = await this.pagoService.confirmarOrganizador(id, user.idUser);
     return zPagoResponse.parse(toResponseDto(pago));
   }
 }

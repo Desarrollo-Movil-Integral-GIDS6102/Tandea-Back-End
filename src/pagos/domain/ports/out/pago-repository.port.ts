@@ -10,6 +10,7 @@ export interface NumeroConCuota {
   roundNumber: number;
   tanda: {
     idTanda: number;
+    idAdmin: number;
     contributionAmount: number;
   } | null;
 }

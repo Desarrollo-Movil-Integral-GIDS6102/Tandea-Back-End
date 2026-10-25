@@ -72,6 +72,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         idUser: numberTable.idUser,
         roundNumber: numberTable.roundNumber,
         idTanda: tandaTable.idTanda,
+        idAdmin: tandaTable.idAdmin,
         contributionAmount: tandaTable.contributionAmount,
       })
       .from(numberTable)
@@ -94,9 +95,10 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
       idUser: row.idUser,
       roundNumber: row.roundNumber,
       tanda:
-        row.idTanda != null && row.contributionAmount != null
+        row.idTanda != null && row.idAdmin != null && row.contributionAmount != null
           ? {
               idTanda: row.idTanda,
+              idAdmin: row.idAdmin,
               contributionAmount: parseFloat(row.contributionAmount),
             }
           : null,

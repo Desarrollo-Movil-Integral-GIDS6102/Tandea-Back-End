@@ -3,6 +3,7 @@ import { Pago, PagoFactory } from '../../domain/entities/Pago';
 import {
   ComprobanteRequeridoError,
   NumeroAjenoError,
+  NoEsOrganizadorError,
   NumeroNoEncontradoError,
   PagoDuplicadoError,
   PagoNotFoundError,
@@ -172,36 +173,30 @@ export class PagoService implements PagoUseCasesPort {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CASO DE USO: CONFIRMAR ORGANIZADOR (1ra confirmación)
+  // CASO DE USO: CONFIRMAR ORGANIZADOR (cierra la doble confirmación;
+  // el participante ya confirmó al registrar)
   // ─────────────────────────────────────────────────────────────────────────
 
-  async confirmarOrganizador(id: number): Promise<Pago> {
+  async confirmarOrganizador(id: number, idUser: number): Promise<Pago> {
     const pago = await this.obtenerPago(id);
+
+    // Solo el organizador (id_admin) de la tanda de este número puede confirmar
+    const numero = await this.pagoRepository.buscarNumeroConCuota(pago.idNumber);
+    if (!numero) {
+      throw new NumeroNoEncontradoError(pago.idNumber);
+    }
+    if (!numero.tanda) {
+      throw new TandaNoEncontradaError(pago.idNumber);
+    }
+    if (numero.tanda.idAdmin !== idUser) {
+      throw new NoEsOrganizadorError();
+    }
 
     // Ejecuta las reglas de negocio en la entidad de dominio
     pago.confirmarPorOrganizador();
 
     // Persiste el estado actualizado
     return this.pagoRepository.update(pago);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // CASO DE USO: CONFIRMAR RECEPTOR (2da confirmación)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  async confirmarReceptor(id: number): Promise<Pago> {
-    const pago = await this.obtenerPago(id);
-
-    // Ejecuta las reglas de negocio en la entidad de dominio
-    pago.confirmarPorReceptor();
-
-    // Persiste el estado actualizado
-    const pagoActualizado = await this.pagoRepository.update(pago);
-
-    // TODO: Disparar evento de dominio a través de un puerto de eventos
-    // await this.eventBus.publish(new PagoConfirmadoEvent(pagoActualizado));
-
-    return pagoActualizado;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
