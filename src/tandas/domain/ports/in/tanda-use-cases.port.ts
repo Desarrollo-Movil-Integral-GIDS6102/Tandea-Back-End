@@ -34,7 +34,11 @@ export interface ListTandasQuery {
 }
 
 export interface PaginatedTandasResult {
-  data: (TandaProps & { rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL' })[];
+  data: (TandaProps & {
+    rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL';
+    /** Turno del usuario autenticado en esta tanda, o null si no participa. */
+    miNumero?: { idNumber: number; numberValue: number; roundNumber: number } | null;
+  })[];
   total: number;
   page: number;
   limit: number;

@@ -4,6 +4,7 @@ import { Pago } from '../../domain/entities/Pago';
 import {
   ComprobanteRequeridoError,
   MontoHibridoInvalidoError,
+  NoEsOrganizadorError,
   NumeroAjenoError,
   NumeroNoEncontradoError,
   PagoDuplicadoError,
@@ -26,6 +27,7 @@ const URL_COMPROBANTE = 'https://res.cloudinary.com/tandea/image/upload/comproba
 const ID_USER = 7;
 const ID_NUMBER = 10;
 const ID_TANDA = 3;
+const ID_ORGANIZADOR = 1;
 
 const comprobante: ComprobanteArchivo = {
   buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -38,7 +40,7 @@ function numero(overrides: Partial<NumeroConCuota> = {}): NumeroConCuota {
     idNumber: ID_NUMBER,
     idUser: ID_USER,
     roundNumber: 1,
-    tanda: { idTanda: ID_TANDA, contributionAmount: 1000 },
+    tanda: { idTanda: ID_TANDA, idAdmin: ID_ORGANIZADOR, contributionAmount: 1000 },
     ...overrides,
   };
 }
@@ -189,7 +191,7 @@ describe('PagoService.registrar (AP-03)', () => {
 
     it('acepta 0.1 + 0.2 = 0.3 comparando en centavos', async () => {
       repo.buscarNumeroConCuota.mockResolvedValue(
-        numero({ tanda: { idTanda: ID_TANDA, contributionAmount: 0.3 } }),
+        numero({ tanda: { idTanda: ID_TANDA, idAdmin: ID_ORGANIZADOR, contributionAmount: 0.3 } }),
       );
 
       await registrar({ metodoPago: 'hibrido', transferAmount: 0.1, cashAmount: 0.2 });
@@ -301,6 +303,36 @@ describe('PagoService.registrar (AP-03)', () => {
       const pago = await registrar();
 
       expect(pago.idPayment).toBe(45);
+    });
+  });
+
+  // ── Doble confirmación: participante (al registrar) + organizador ───────
+
+  describe('confirmarOrganizador', () => {
+    it('cierra la doble confirmación de un pago recién registrado', async () => {
+      const registrado = await registrar();
+      expect(registrado.status).toBe('PENDIENTE');
+      expect(registrado.confirmedByParticipant).toBe(true);
+
+      repo.findById.mockResolvedValue(registrado);
+      repo.update.mockImplementation(async (pago: Pago) => pago);
+
+      const confirmado = await service.confirmarOrganizador(45, ID_ORGANIZADOR);
+
+      expect(confirmado.status).toBe('CONFIRMADO');
+      expect(confirmado.confirmedByParticipant).toBe(true);
+      expect(confirmado.confirmedByAdmin).toBe(true);
+      expect(confirmado.estaConfirmado()).toBe(true);
+    });
+
+    it('lanza NoEsOrganizadorError (403) si quien confirma no es el organizador', async () => {
+      repo.findById.mockResolvedValue(await registrar());
+
+      // El propio participante intenta confirmar su pago
+      await expect(service.confirmarOrganizador(45, ID_USER)).rejects.toThrow(
+        NoEsOrganizadorError,
+      );
+      expect(repo.update).not.toHaveBeenCalled();
     });
   });
 });

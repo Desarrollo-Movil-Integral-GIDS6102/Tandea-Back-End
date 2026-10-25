@@ -86,7 +86,6 @@ describe('PagoController — POST /api/v1/pagos (multipart)', () => {
     registrar: vi.fn(),
     obtenerPago: vi.fn(),
     confirmarOrganizador: vi.fn(),
-    confirmarReceptor: vi.fn(),
     actualizarResultadoOcr: vi.fn(),
   };
 

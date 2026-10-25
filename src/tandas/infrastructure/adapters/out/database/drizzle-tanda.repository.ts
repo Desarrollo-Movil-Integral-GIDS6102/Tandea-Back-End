@@ -21,13 +21,7 @@ import {
   userTable,
 } from '../../../../../database/tandea.schema';
 import { Tanda, TandaStatus } from '../../../../domain/entities/tanda.entity';
-import { NumeroTanda } from '../../../../domain/entities/numero-tanda.entity';
-import { NumeroMapper } from './mappers/numero.mapper';
-import {
-  NumeroYaTomadoError,
-  NumeroMuertoNoElegibleError,
-  NumeroInexistenteError,
-} from '../../../../domain/errors/numero.errors';
+import { NumeroYaTomadoError } from '../../../../domain/errors/numero.errors';
 import {
   TandaRepositoryPort,
   TandaFilterOptions,
@@ -253,17 +247,27 @@ export class DrizzleTandaRepository
   // =========================================================================
 
   async createNumber(data: CreateNumberData): Promise<NumberRecord> {
-    const [row] = await this.db
-      .insert(numberTable)
-      .values({
-        idTanda: data.idTanda,
-        roundNumber: data.roundNumber,
-        numberValue: data.numberValue,
-        idUser: data.idUser,
-        isDeadNumber: data.isDeadNumber,
-        status: data.status as any,
-      })
-      .returning();
+    let row: typeof numberTable.$inferSelect;
+    try {
+      [row] = await this.db
+        .insert(numberTable)
+        .values({
+          idTanda: data.idTanda,
+          roundNumber: data.roundNumber,
+          numberValue: data.numberValue,
+          idUser: data.idUser,
+          isDeadNumber: data.isDeadNumber,
+          status: data.status as any,
+        })
+        .returning();
+    } catch (error: any) {
+      // Dos personas eligieron el mismo turno a la vez: el índice único deja pasar solo a una (AP-02)
+      const code = error?.code || error?.cause?.code;
+      if (code === '23505') {
+        throw new NumeroYaTomadoError(data.numberValue, data.roundNumber);
+      }
+      throw error;
+    }
 
     return {
       idNumber: row.idNumber,
@@ -328,6 +332,7 @@ export class DrizzleTandaRepository
         and(
           eq(numberTable.idTanda, idTanda),
           eq(numberTable.roundNumber, 1),
+          eq(numberTable.isDeadNumber, false),
           isNull(numberTable.deletedAt),
         ),
       );
@@ -370,103 +375,6 @@ export class DrizzleTandaRepository
       userEmail: r.userEmail,
     }));
   }
-
-
-  async asignarSiLibre(
-    idTanda: number,
-    roundNumber: number,
-    numberValue: number,
-    idUsuario: number,
-  ): Promise<NumeroTanda> {
-    try {
-      return await this.db.transaction(async (tx) => {
-        // 1. UPDATE atómico a nivel de base de datos dentro de una transacción:
-        // Solo actualiza si id_user es NULL, no es número muerto y no está borrado.
-        const updatedRows = await tx
-          .update(numberTable)
-          .set({
-            idUser: idUsuario,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(numberTable.idTanda, idTanda),
-              eq(numberTable.roundNumber, roundNumber),
-              eq(numberTable.numberValue, numberValue),
-              isNull(numberTable.idUser),
-              eq(numberTable.isDeadNumber, false),
-              isNull(numberTable.deletedAt),
-            ),
-          )
-          .returning();
-
-        if (updatedRows.length > 0) {
-          return NumeroMapper.toDomain(updatedRows[0]);
-        }
-
-        // 2. Si no actualizó ninguna fila, distinguir la causa exacta consultando la fila
-        const [existing] = await tx
-          .select()
-          .from(numberTable)
-          .where(
-            and(
-              eq(numberTable.idTanda, idTanda),
-              eq(numberTable.roundNumber, roundNumber),
-              eq(numberTable.numberValue, numberValue),
-              isNull(numberTable.deletedAt),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          throw new NumeroInexistenteError(numberValue, idTanda);
-        }
-
-        if (existing.isDeadNumber) {
-          throw new NumeroMuertoNoElegibleError(numberValue);
-        }
-
-        if (existing.idUser !== null) {
-          throw new NumeroYaTomadoError(numberValue, roundNumber);
-        }
-
-        throw new NumeroYaTomadoError(numberValue, roundNumber);
-      });
-    } catch (error: any) {
-      // En Drizzle 0.44 el error de PostgreSQL puede venir en error.code o error.cause.code
-      const code = error?.code || error?.cause?.code;
-      if (code === '23505') {
-        throw new NumeroYaTomadoError(numberValue, roundNumber);
-      }
-      throw error;
-    }
-  }
-
-  async findByTandaRoundAndValue(
-    idTanda: number,
-    roundNumber: number,
-    numberValue: number,
-  ): Promise<NumeroTanda | null> {
-    const [row] = await this.db
-      .select()
-      .from(numberTable)
-      .where(
-        and(
-          eq(numberTable.idTanda, idTanda),
-          eq(numberTable.roundNumber, roundNumber),
-          eq(numberTable.numberValue, numberValue),
-          isNull(numberTable.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    if (!row) {
-      return null;
-    }
-
-    return NumeroMapper.toDomain(row);
-  }
-
 
   // =========================================================================
   // HELPER MAPPER

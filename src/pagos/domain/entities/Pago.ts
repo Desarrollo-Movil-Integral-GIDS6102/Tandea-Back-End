@@ -2,7 +2,6 @@ import {
   ConfirmacionAdminPreviaError,
   ConfirmacionOrganizadorPreviaError,
   ConfirmacionParticipantePreviaError,
-  OrganizadorDebeConfirmarPrimeroError,
   PagoRechazadoError,
   PagoYaConfirmadoError,
 } from '../errors/pago.errors';
@@ -14,8 +13,7 @@ export type EstadoPago =
   | 'RECHAZADO'
   | 'pendiente'
   | 'confirmado'
-  | 'rechazado'
-  | 'confirmado_parcial';
+  | 'rechazado';
 
 export interface PagoProps {
   idPayment?: number;
@@ -39,7 +37,6 @@ export interface PagoProps {
   participanteId?: string;
   numeroPago?: number;
   confirmadoOrganizadorEn?: Date | null;
-  confirmadoReceptorEn?: Date | null;
   fechaPago?: Date;
 }
 
@@ -136,7 +133,6 @@ export class Pago {
       participanteId: props.participanteId,
       numeroPago: props.numeroPago,
       confirmadoOrganizadorEn: confirmedByAdmin ? now : null,
-      confirmadoReceptorEn: null,
       fechaPago: props.fechaPago ?? now,
     });
   }
@@ -241,10 +237,6 @@ export class Pago {
     return this.props.confirmadoOrganizadorEn ?? null;
   }
 
-  get confirmadoReceptorEn(): Date | null {
-    return this.props.confirmadoReceptorEn ?? null;
-  }
-
   get fechaPago(): Date {
     return this.props.fechaPago ?? this.props.createdAt;
   }
@@ -323,27 +315,6 @@ export class Pago {
       throw new ConfirmacionOrganizadorPreviaError();
     }
     this.confirmarPorAdmin();
-  }
-
-  /**
-   * Compatibilidad para segundo paso de entrega al receptor.
-   */
-  public confirmarPorReceptor(): void {
-    if (this.props.status === 'RECHAZADO') {
-      throw new PagoRechazadoError();
-    }
-    if (this.estaConfirmado()) {
-      throw new PagoYaConfirmadoError();
-    }
-    if (!this.props.confirmedByAdmin) {
-      throw new OrganizadorDebeConfirmarPrimeroError();
-    }
-
-    const now = new Date();
-    this.props.confirmadoReceptorEn = now;
-    this.props.confirmedByParticipant = true;
-    this.props.status = 'CONFIRMADO';
-    this.props.updatedAt = now;
   }
 
   /**

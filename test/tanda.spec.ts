@@ -93,11 +93,25 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(mockNumberRepo.createNumber).toHaveBeenCalledWith({
         idTanda: 1,
         roundNumber: 1,
-        numberValue: 5,
+        numberValue: 6, // turno extra: 5 participantes + número muerto
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
       });
+    });
+
+    it('con número muerto, el último participante real todavía encuentra lugar', async () => {
+      const tanda = new Tanda({ ...mockTandaData, hasDeadNumber: true });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
+      // 4 participantes reales; el número muerto (6) no cuenta para el cupo
+      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(4);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 6]);
+
+      const result = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 50 });
+
+      expect(result.numeroAsignado).toBe(5);
+      expect(mockTandaRepo.updateStatus).toHaveBeenCalledWith(1, 'ACTIVA');
     });
 
     it('debe permitir crear una tanda con el mínimo válido de 3 participantes', async () => {
@@ -209,6 +223,28 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(res.total).toBe(1);
       expect(res.data[0].rolUsuario).toBe('DUENO');
       expect(res.totalPages).toBe(1);
+    });
+
+    it('incluye el turno del participante (miNumero) para poder pagar', async () => {
+      vi.spyOn(mockTandaRepo, 'findAll').mockResolvedValue({
+        data: [new Tanda(mockTandaData)],
+        total: 1,
+      });
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([
+        {
+          idNumber: 101,
+          idTanda: 1,
+          roundNumber: 1,
+          numberValue: 3,
+          idUser: 25,
+          isDeadNumber: false,
+          status: 'PENDIENTE',
+        },
+      ]);
+
+      const res = await service.listarTandas({ page: 1, limit: 10, scope: 'participante' }, 25, 'usuario');
+
+      expect(res.data[0].miNumero).toEqual({ idNumber: 101, numberValue: 3, roundNumber: 1 });
     });
   });
 

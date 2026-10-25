@@ -40,6 +40,12 @@ export class NumeroAjenoError extends DomainError {
   }
 }
 
+export class NoEsOrganizadorError extends DomainError {
+  constructor() {
+    super('Solo el organizador de la tanda puede confirmar este pago');
+  }
+}
+
 export class PagoDuplicadoError extends DomainError {
   constructor(public readonly idNumber: number) {
     super(
@@ -69,12 +75,6 @@ export class ConfirmacionParticipantePreviaError extends DomainError {
 export class ConfirmacionAdminPreviaError extends DomainError {
   constructor() {
     super('El administrador ya confirmó este pago previamente');
-  }
-}
-
-export class OrganizadorDebeConfirmarPrimeroError extends DomainError {
-  constructor() {
-    super('El organizador debe confirmar primero antes de que el receptor pueda confirmar');
   }
 }
 

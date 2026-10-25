@@ -1,6 +1,6 @@
 # Módulo de Pagos — Tandea (Documentación Técnica y Flujo AP-03)
 
-El módulo de Pagos es el núcleo transaccional de Tandea. Permite a los participantes abonar sus cuotas mediante tres modalidades (Efectivo, Transferencia o Híbrido), respaldar el pago con comprobantes digitales y someter la transacción a doble confirmación (Organizador y Receptor) con validación OCR automatizada.
+El módulo de Pagos es el núcleo transaccional de Tandea. Permite a los participantes abonar sus cuotas mediante tres modalidades (Efectivo, Transferencia o Híbrido), respaldar el pago con comprobantes digitales y someter la transacción a doble confirmación (Participante y Organizador) con validación OCR automatizada.
 
 ---
 
