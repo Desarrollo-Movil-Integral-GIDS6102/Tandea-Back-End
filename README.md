@@ -544,6 +544,8 @@ Configura las siguientes variables en la sección **Variables** del servicio en 
 | `NODE_ENV` | Entorno de ejecución | `production` |
 | `CORS_ORIGIN` | Orígenes permitidos (`*` para permitir cualquier origen) | `*` |
 | `JWT_SECRET` | Clave secreta para firmar y validar tokens de autenticación JWT | `tu_clave_secreta_jwt` |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Credenciales de Cloudinary para guardar comprobantes en `comprobantes/` | `tu_cloud_name` |
+| `GOOGLE_VISION_KEY` | API key de Google Cloud con la Vision API habilitada, para leer el monto del comprobante (AP-04). Vacía = OCR desactivado y el pago queda para revisión manual | `AIza...` |
 
 > **Nota sobre SSL en Railway:**
 > - Si el backend y la base de datos están en el mismo proyecto de Railway y se comunican mediante la red interna (`postgres.railway.internal`), **no se requiere SSL** (`DATABASE_SSL=false`).
