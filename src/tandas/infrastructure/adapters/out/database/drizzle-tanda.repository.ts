@@ -328,6 +328,7 @@ export class DrizzleTandaRepository
         and(
           eq(numberTable.idTanda, idTanda),
           eq(numberTable.roundNumber, 1),
+          eq(numberTable.isDeadNumber, false),
           isNull(numberTable.deletedAt),
         ),
       );

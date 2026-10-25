@@ -93,11 +93,25 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(mockNumberRepo.createNumber).toHaveBeenCalledWith({
         idTanda: 1,
         roundNumber: 1,
-        numberValue: 5,
+        numberValue: 6, // turno extra: 5 participantes + número muerto
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
       });
+    });
+
+    it('con número muerto, el último participante real todavía encuentra lugar', async () => {
+      const tanda = new Tanda({ ...mockTandaData, hasDeadNumber: true });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
+      // 4 participantes reales; el número muerto (6) no cuenta para el cupo
+      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(4);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 6]);
+
+      const result = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 50 });
+
+      expect(result.numeroAsignado).toBe(5);
+      expect(mockTandaRepo.updateStatus).toHaveBeenCalledWith(1, 'ACTIVA');
     });
 
     it('debe permitir crear una tanda con el mínimo válido de 3 participantes', async () => {

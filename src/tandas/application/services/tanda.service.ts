@@ -78,12 +78,13 @@ export class TandaService implements TandaUseCasesPort {
 
     const tandaCreada = await this.tandaRepository.create(tanda);
 
-    // 4. Si tiene número muerto configurado, reservar el turno en la vuelta 1
+    // 4. Si tiene número muerto, reservar un turno EXTRA en la vuelta 1
+    //    (participantes + 1, igual que calcularPlan); no ocupa lugar de nadie
     if (tandaCreada.hasDeadNumber && tandaCreada.idTanda) {
       await this.numberRepository.createNumber({
         idTanda: tandaCreada.idTanda,
         roundNumber: 1,
-        numberValue: tandaCreada.numParticipants, // Último turno para el número muerto
+        numberValue: tandaCreada.numParticipants + 1,
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
