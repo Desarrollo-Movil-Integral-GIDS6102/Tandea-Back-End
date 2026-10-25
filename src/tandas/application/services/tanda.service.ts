@@ -170,9 +170,15 @@ export class TandaService implements TandaUseCasesPort {
           rolUsuario = 'DUENO';
         }
 
+        // Turno del usuario en la vuelta 1 (para que el participante pueda pagar)
+        const turno = userNums.find((n) => n.roundNumber === 1) ?? userNums[0];
+
         return {
           ...t.toPrimitives(),
           rolUsuario,
+          miNumero: turno
+            ? { idNumber: turno.idNumber, numberValue: turno.numberValue, roundNumber: turno.roundNumber }
+            : null,
         };
       }),
     );

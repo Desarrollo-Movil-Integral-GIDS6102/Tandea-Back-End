@@ -224,6 +224,28 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(res.data[0].rolUsuario).toBe('DUENO');
       expect(res.totalPages).toBe(1);
     });
+
+    it('incluye el turno del participante (miNumero) para poder pagar', async () => {
+      vi.spyOn(mockTandaRepo, 'findAll').mockResolvedValue({
+        data: [new Tanda(mockTandaData)],
+        total: 1,
+      });
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([
+        {
+          idNumber: 101,
+          idTanda: 1,
+          roundNumber: 1,
+          numberValue: 3,
+          idUser: 25,
+          isDeadNumber: false,
+          status: 'PENDIENTE',
+        },
+      ]);
+
+      const res = await service.listarTandas({ page: 1, limit: 10, scope: 'participante' }, 25, 'usuario');
+
+      expect(res.data[0].miNumero).toEqual({ idNumber: 101, numberValue: 3, roundNumber: 1 });
+    });
   });
 
   describe('Actualizar Tanda (Update)', () => {
