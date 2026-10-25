@@ -36,7 +36,7 @@ El módulo de Autenticación gestiona el ciclo de vida del usuario, registro seg
   * `age` (Edad opcional, mínimo 18 años).
   * `gender` (Género opcional).
 * **Validación de Contraseñas Robustas (`register_validators.dart`)**:
-  * Longitud mínima de 12 caracteres (alineado a la política del backend).
+  * Longitud mínima de 8 caracteres (alineado a `PASSWORD_MIN_LENGTH` del backend).
   * Prohibición de secuencias numéricas/alfabéticas triviales (`123456`, `abcdef`).
   * Prohibición de palabras comunes del diccionario de claves débiles.
   * Prohibición de incluir el correo o nombre del usuario dentro de la clave.
