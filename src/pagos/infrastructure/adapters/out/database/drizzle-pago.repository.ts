@@ -135,6 +135,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         status: data.status,
         confirmedByParticipant: data.confirmedByParticipant,
         confirmedByAdmin: data.confirmedByAdmin,
+        rejectionReason: data.rejectionReason,
         ocrDetectedAmount: data.ocrDetectedAmount,
         ocrVerified: data.ocrVerified,
       })

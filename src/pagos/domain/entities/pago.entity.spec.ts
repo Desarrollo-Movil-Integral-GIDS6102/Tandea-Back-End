@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { Pago, MetodoPago } from './Pago';
+import { Pago } from './Pago';
 import {
   ConfirmacionAdminPreviaError,
+  ConfirmacionOrganizadorPreviaError,
   ConfirmacionParticipantePreviaError,
+  MotivoRechazoRequeridoError,
   PagoRechazadoError,
   PagoYaConfirmadoError,
+  PagoYaRechazadoError,
 } from '../errors/pago.errors';
 
 describe('Entidad de Dominio: Pago', () => {
@@ -26,6 +29,7 @@ describe('Entidad de Dominio: Pago', () => {
     expect(pago.status).toBe('PENDIENTE');
     expect(pago.confirmedByParticipant).toBe(false);
     expect(pago.confirmedByAdmin).toBe(false);
+    expect(pago.estado).toBe('pendiente');
   });
 
   describe('Flujo de Confirmaciones y estaConfirmado()', () => {
@@ -37,6 +41,7 @@ describe('Entidad de Dominio: Pago', () => {
       });
 
       expect(pago.estaConfirmado()).toBe(false);
+      expect(pago.estado).toBe('pendiente');
     });
 
     it('estaConfirmado() debe retornar false si SOLO el participante ha confirmado', () => {
@@ -52,9 +57,10 @@ describe('Entidad de Dominio: Pago', () => {
       expect(pago.confirmedByAdmin).toBe(false);
       expect(pago.status).toBe('PENDIENTE');
       expect(pago.estaConfirmado()).toBe(false);
+      expect(pago.estado).toBe('pendiente');
     });
 
-    it('estaConfirmado() debe retornar false si SOLO el administrador ha confirmado', () => {
+    it('estaConfirmado() debe retornar false y estado "confirmado_parcial" si SOLO el administrador confirma', () => {
       const pago = Pago.create({
         idNumber: 10,
         metodoPago: 'efectivo',
@@ -67,9 +73,39 @@ describe('Entidad de Dominio: Pago', () => {
       expect(pago.confirmedByAdmin).toBe(true);
       expect(pago.status).toBe('PENDIENTE');
       expect(pago.estaConfirmado()).toBe(false);
+      expect(pago.estado).toBe('confirmado_parcial');
     });
 
-    it('estaConfirmado() debe retornar true y estado CONFIRMADO cuando AMBOS confirman (participante primero, admin después)', () => {
+    it('confirmarPorOrganizador() debe actualizar confirmedByAdmin y pasar a "confirmado_parcial"', () => {
+      const pago = Pago.create({
+        idNumber: 10,
+        metodoPago: 'efectivo',
+        totalAmount: 1000,
+      });
+
+      pago.confirmarPorOrganizador();
+
+      expect(pago.confirmedByAdmin).toBe(true);
+      expect(pago.status).toBe('PENDIENTE');
+      expect(pago.estado).toBe('confirmado_parcial');
+      expect(pago.confirmadoOrganizadorEn).toBeInstanceOf(Date);
+    });
+
+    it('confirmarPorOrganizador() debe lanzar ConfirmacionOrganizadorPreviaError si ya fue confirmado por organizador', () => {
+      const pago = Pago.create({
+        idNumber: 10,
+        metodoPago: 'efectivo',
+        totalAmount: 1000,
+      });
+
+      pago.confirmarPorOrganizador();
+
+      expect(() => pago.confirmarPorOrganizador()).toThrow(
+        ConfirmacionOrganizadorPreviaError,
+      );
+    });
+
+    it('estaConfirmado() debe retornar true y estado "confirmado" cuando AMBOS confirman (participante primero, admin después)', () => {
       const pago = Pago.create({
         idNumber: 10,
         metodoPago: 'efectivo',
@@ -84,9 +120,10 @@ describe('Entidad de Dominio: Pago', () => {
       expect(pago.confirmedByAdmin).toBe(true);
       expect(pago.status).toBe('CONFIRMADO');
       expect(pago.estaConfirmado()).toBe(true);
+      expect(pago.estado).toBe('confirmado');
     });
 
-    it('estaConfirmado() debe retornar true y estado CONFIRMADO cuando AMBOS confirman (admin primero, participante después)', () => {
+    it('estaConfirmado() debe retornar true y estado "confirmado" cuando AMBOS confirman (admin primero, participante después)', () => {
       const pago = Pago.create({
         idNumber: 10,
         metodoPago: 'transferencia',
@@ -97,12 +134,14 @@ describe('Entidad de Dominio: Pago', () => {
 
       pago.confirmarPorAdmin();
       expect(pago.estaConfirmado()).toBe(false);
+      expect(pago.estado).toBe('confirmado_parcial');
 
       pago.confirmarPorParticipante();
       expect(pago.confirmedByParticipant).toBe(true);
       expect(pago.confirmedByAdmin).toBe(true);
       expect(pago.status).toBe('CONFIRMADO');
       expect(pago.estaConfirmado()).toBe(true);
+      expect(pago.estado).toBe('confirmado');
     });
 
     it('debe lanzar ConfirmacionParticipantePreviaError si el participante intenta confirmar dos veces', () => {
@@ -146,6 +185,44 @@ describe('Entidad de Dominio: Pago', () => {
 
       expect(() => pago.confirmarPorParticipante()).toThrow(PagoYaConfirmadoError);
       expect(() => pago.confirmarPorAdmin()).toThrow(PagoYaConfirmadoError);
+      expect(() => pago.confirmarPorOrganizador()).toThrow(PagoYaConfirmadoError);
+    });
+
+    it('debe rechazar con motivo, guardar el motivo y pasar estado a "rechazado"', () => {
+      const pago = Pago.create({
+        idNumber: 10,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
+      });
+
+      pago.rechazar('Comprobante ilegible y monto discrepante');
+
+      expect(pago.status).toBe('RECHAZADO');
+      expect(pago.estado).toBe('rechazado');
+      expect(pago.rejectionReason).toBe('Comprobante ilegible y monto discrepante');
+    });
+
+    it('debe lanzar MotivoRechazoRequeridoError si se intenta rechazar sin motivo o motivo vacío', () => {
+      const pago = Pago.create({
+        idNumber: 10,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
+      });
+
+      expect(() => pago.rechazar('')).toThrow(MotivoRechazoRequeridoError);
+      expect(() => pago.rechazar('   ')).toThrow(MotivoRechazoRequeridoError);
+    });
+
+    it('debe lanzar PagoYaRechazadoError si se intenta rechazar un pago que ya fue rechazado', () => {
+      const pago = Pago.create({
+        idNumber: 10,
+        metodoPago: 'efectivo',
+        totalAmount: 1000,
+      });
+
+      pago.rechazar('Primer motivo');
+
+      expect(() => pago.rechazar('Segundo motivo')).toThrow(PagoYaRechazadoError);
     });
 
     it('debe lanzar PagoRechazadoError si se intenta confirmar un pago rechazado', () => {
@@ -155,11 +232,12 @@ describe('Entidad de Dominio: Pago', () => {
         totalAmount: 1000,
       });
 
-      pago.rechazar();
+      pago.rechazar('Comprobante inválido');
       expect(pago.status).toBe('RECHAZADO');
 
       expect(() => pago.confirmarPorParticipante()).toThrow(PagoRechazadoError);
       expect(() => pago.confirmarPorAdmin()).toThrow(PagoRechazadoError);
+      expect(() => pago.confirmarPorOrganizador()).toThrow(PagoRechazadoError);
     });
 
     it('no debe permitir rechazar un pago que ya está confirmado', () => {
@@ -172,7 +250,7 @@ describe('Entidad de Dominio: Pago', () => {
       pago.confirmarPorParticipante();
       pago.confirmarPorAdmin();
 
-      expect(() => pago.rechazar()).toThrow(PagoYaConfirmadoError);
+      expect(() => pago.rechazar('Demasiado tarde')).toThrow(PagoYaConfirmadoError);
     });
   });
 

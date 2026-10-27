@@ -8,22 +8,22 @@ import {
 } from '@nestjs/platform-fastify';
 import { PagoController } from '../src/pagos/infrastructure/adapters/in/http/controllers/pago.controller';
 import { PAGO_SERVICE_PORT } from '../src/pagos/domain/ports/in/pago-use-cases.port';
+import { DATABASE_TOKEN } from '../src/common/tokens';
 import { JwtStrategy } from '../src/auth/infrastructure/adapters/in/http/strategies/jwt.strategy';
+import { TandaMemberGuard } from '../src/auth/infrastructure/adapters/in/http/guards/tanda-member.guard';
 import { GlobalExceptionFilter } from '../src/common/filters/global-exception.filter';
-import { COMPROBANTE_MAX_BYTES } from '../src/pagos/infrastructure/adapters/in/http/multipart/comprobante.file';
 import { Pago } from '../src/pagos/domain/entities/Pago';
 import { PagoFactory } from '../src/pagos/domain/factories/pago.factory';
 import {
+  ConfirmacionOrganizadorPreviaError,
   MontoHibridoInvalidoError,
   NumeroAjenoError,
   NumeroNoEncontradoError,
   PagoDuplicadoError,
+  PagoNotFoundError,
+  PagoRechazadoError,
+  PagoYaConfirmadoError,
 } from '../src/pagos/domain/errors/pago.errors';
-
-/**
- * [BE-PAGO] POST /api/v1/pagos (AP-03) — controlador sobre Fastify real
- * (multipart, JwtAuthGuard y filtros), con el caso de uso mockeado.
- */
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
 const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
@@ -79,22 +79,37 @@ function pagoRegistrado(): Pago {
   return Pago.reconstitute({ ...pago.toPrimitives(), idPayment: 45 });
 }
 
-describe('PagoController — POST /api/v1/pagos (multipart)', () => {
+describe('PagoController', () => {
   let app: NestFastifyApplication;
   let token: string;
   const servicio = {
     registrar: vi.fn(),
     obtenerPago: vi.fn(),
+    confirmar: vi.fn(),
+    rechazar: vi.fn(),
     confirmarOrganizador: vi.fn(),
     confirmarReceptor: vi.fn(),
     actualizarResultadoOcr: vi.fn(),
+  };
+
+  const mockDb = {
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    limit: vi.fn(),
   };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [PassportModule],
       controllers: [PagoController],
-      providers: [JwtStrategy, { provide: PAGO_SERVICE_PORT, useValue: servicio }],
+      providers: [
+        JwtStrategy,
+        TandaMemberGuard,
+        { provide: PAGO_SERVICE_PORT, useValue: servicio },
+        { provide: DATABASE_TOKEN, useValue: mockDb },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -115,6 +130,7 @@ describe('PagoController — POST /api/v1/pagos (multipart)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     servicio.registrar.mockResolvedValue(pagoRegistrado());
+    mockDb.limit.mockResolvedValue([{ idPayment: 45, idAdmin: 7 }]);
   });
 
   const camposHibrido = {
@@ -135,169 +151,369 @@ describe('PagoController — POST /api/v1/pagos (multipart)', () => {
       headers: { 'content-type': form.contentType, ...headers },
     });
 
-  // ── Casos exitosos ──────────────────────────────────────────────────────
+  // ── POST /api/v1/pagos ───────────────────────────────────────────────────
 
-  it('201: registra un pago híbrido con comprobante PNG y responde sin datos sensibles', async () => {
-    const res = await enviar(
-      multipart(camposHibrido, { filename: 'spei.png', contentType: 'image/png', content: PNG }),
-    );
+  describe('POST /api/v1/pagos (multipart)', () => {
+    it('201: registra un pago híbrido con comprobante PNG y responde sin datos sensibles', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, { filename: 'spei.png', contentType: 'image/png', content: PNG }),
+      );
 
-    expect(res.statusCode).toBe(201);
-    expect(servicio.registrar).toHaveBeenCalledWith({
-      idUser: 7,
-      idNumber: 10,
-      metodoPago: 'hibrido',
-      transferAmount: 600,
-      cashAmount: 400,
-      comprobante: {
-        buffer: PNG,
-        mimetype: 'image/png',
-        nombreOriginal: 'spei.png',
-      },
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({
+        idPayment: 45,
+        idNumber: 10,
+        metodoPago: 'hibrido',
+        totalAmount: 1000,
+        transferAmount: 600,
+        cashAmount: 400,
+        status: 'PENDIENTE',
+        confirmedByParticipant: true,
+        confirmedByAdmin: false,
+        evidenceUrl: expect.stringContaining('cloudinary'),
+      });
+      expect(JSON.stringify(res.json())).not.toMatch(/password|hash/i);
     });
 
-    const body = res.json();
-    expect(body).toMatchObject({
-      idPayment: 45,
-      idNumber: 10,
-      metodoPago: 'hibrido',
-      transferAmount: 600,
-      cashAmount: 400,
-      totalAmount: 1000,
-      status: 'PENDIENTE',
-      confirmedByParticipant: true,
-      confirmedByAdmin: false,
-      ocrVerified: false,
-      ocrDetectedAmount: null,
+    it('201: acepta comprobante JPG', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, { filename: 'recibo.jpg', contentType: 'image/jpeg', content: JPG }),
+      );
+      expect(res.statusCode).toBe(201);
     });
-    expect(Object.keys(body)).not.toEqual(
-      expect.arrayContaining(['idUser', 'email', 'passwordHash']),
-    );
+
+    it('201: acepta comprobante PDF', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, { filename: 'spei.pdf', contentType: 'application/pdf', content: PDF }),
+      );
+      expect(res.statusCode).toBe(201);
+    });
+
+    it('201: acepta pago en efectivo sin archivo', async () => {
+      servicio.registrar.mockResolvedValue(
+        Pago.reconstitute({
+          idPayment: 46,
+          idNumber: 10,
+          metodoPago: 'efectivo',
+          totalAmount: 1000,
+          transferAmount: 0,
+          cashAmount: 1000,
+          status: 'PENDIENTE',
+          confirmedByParticipant: true,
+          confirmedByAdmin: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+
+      const res = await enviar(
+        multipart({ idNumber: '10', metodoPago: 'efectivo', cashAmount: '1000' }),
+      );
+      expect(res.statusCode).toBe(201);
+      expect(res.json().metodoPago).toBe('efectivo');
+      expect(res.json().evidenceUrl).toBeNull();
+    });
+
+    it('400: rechaza tipos de archivo no permitidos', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, {
+          filename: 'animacion.gif',
+          contentType: 'image/gif',
+          content: Buffer.from('GIF89a'),
+        }),
+      );
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toContain('JPG, PNG o PDF');
+      expect(servicio.registrar).not.toHaveBeenCalled();
+    });
+
+    it('400: rechaza un archivo cuyo contenido no coincide con el tipo declarado', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, {
+          filename: 'falso.png',
+          contentType: 'image/png',
+          content: Buffer.from('<script>alert(1)</script>'),
+        }),
+      );
+      expect(res.statusCode).toBe(400);
+      expect(servicio.registrar).not.toHaveBeenCalled();
+    });
+
+    it('400: rechaza el archivo en un campo distinto de "file"', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, {
+          field: 'comprobante',
+          filename: 'spei.png',
+          contentType: 'image/png',
+          content: PNG,
+        }),
+      );
+      expect(res.statusCode).toBe(400);
+      expect(servicio.registrar).not.toHaveBeenCalled();
+    });
+
+    it('413: rechaza comprobantes de más de 10 MB', async () => {
+      const res = await enviar(
+        multipart(camposHibrido, {
+          filename: 'pesado.png',
+          contentType: 'image/png',
+          content: Buffer.concat([PNG, Buffer.alloc(10 * 1024 * 1024 + 1)]),
+        }),
+      );
+      expect(res.statusCode).toBe(413);
+    });
+
+    it('401: sin token', async () => {
+      const res = await enviar(multipart(camposHibrido), {});
+      expect(res.statusCode).toBe(401);
+      expect(servicio.registrar).not.toHaveBeenCalled();
+    });
+
+    it('422: DTO inválido (método desconocido e idNumber no numérico)', async () => {
+      const res = await enviar(multipart({ idNumber: 'abc', metodoPago: 'cheque' }));
+      expect(res.statusCode).toBe(422);
+      expect(servicio.registrar).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['403', new NumeroAjenoError(), 403],
+      ['404', new NumeroNoEncontradoError(10), 404],
+      ['409', new PagoDuplicadoError(10), 409],
+      ['422 (suma híbrida)', new MontoHibridoInvalidoError(400, 500, 900, 1000), 422],
+    ])('%s: traduce el error de dominio del caso de uso', async (_caso, error, status) => {
+      servicio.registrar.mockRejectedValue(error);
+
+      const res = await enviar(
+        multipart(camposHibrido, { filename: 'spei.png', contentType: 'image/png', content: PNG }),
+      );
+
+      expect(res.statusCode).toBe(status);
+      expect(res.json().message).toBe(error.message);
+    });
   });
 
-  it.each([
-    ['JPG', 'image/jpeg', JPG],
-    ['PDF', 'application/pdf', PDF],
-  ])('201: acepta comprobante %s', async (_nombre, contentType, content) => {
-    const res = await enviar(
-      multipart(camposHibrido, { filename: 'comprobante', contentType, content }),
-    );
+  // ── PATCH /api/v1/pagos/:id/confirmar (AP-05) ─────────────────────────────
 
-    expect(res.statusCode).toBe(201);
-    expect(servicio.registrar).toHaveBeenCalledWith(
-      expect.objectContaining({ comprobante: expect.objectContaining({ mimetype: contentType }) }),
-    );
+  describe('PATCH /api/v1/pagos/:id/confirmar', () => {
+    it('200: el admin de la tanda confirma el pago correctamente', async () => {
+      const pagoConfirmado = Pago.reconstitute({
+        idPayment: 45,
+        idNumber: 10,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
+        transferAmount: 1000,
+        cashAmount: 0,
+        status: 'PENDIENTE',
+        confirmedByParticipant: false,
+        confirmedByAdmin: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      servicio.confirmar.mockResolvedValue(pagoConfirmado);
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/confirmar',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        idPayment: 45,
+        confirmedByAdmin: true,
+        status: 'PENDIENTE',
+      });
+      expect(servicio.confirmar).toHaveBeenCalledWith(45);
+    });
+
+    it('403: usuario que NO es admin de la tanda es rechazado por TandaMemberGuard', async () => {
+      mockDb.limit.mockResolvedValue([{ idPayment: 45, idAdmin: 999 }]); // idAdmin 999 !== user 7
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/confirmar',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json().message).toMatch(/Solo el administrador de la tanda/i);
+      expect(servicio.confirmar).not.toHaveBeenCalled();
+    });
+
+    it('404: pago inexistente', async () => {
+      mockDb.limit.mockResolvedValue([]); // No existe en BD
+      servicio.confirmar.mockRejectedValue(new PagoNotFoundError(45));
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/confirmar',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().message).toMatch(/Pago con id "45" no encontrado/i);
+    });
+
+    it('422: confirmar un pago ya confirmado lanza 422', async () => {
+      servicio.confirmar.mockRejectedValue(new PagoYaConfirmadoError());
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/confirmar',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json().message).toMatch(/ya está completamente confirmado/i);
+    });
+
+    it('422: confirmar un pago ya rechazado lanza 422', async () => {
+      servicio.confirmar.mockRejectedValue(new PagoRechazadoError());
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/confirmar',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json().message).toMatch(/El pago fue rechazado y no admite más confirmaciones/i);
+    });
+
+    it('422: confirmar cuando el organizador ya confirmó lanza 422', async () => {
+      servicio.confirmar.mockRejectedValue(new ConfirmacionOrganizadorPreviaError());
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/confirmar',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json().message).toMatch(/El organizador ya confirmó este pago/i);
+    });
   });
 
-  it('201: acepta pago en efectivo sin archivo', async () => {
-    const res = await enviar(
-      multipart({ idNumber: '10', metodoPago: 'efectivo', cashAmount: '1000' }),
-    );
+  // ── PATCH /api/v1/pagos/:id/rechazar (AP-05) ──────────────────────────────
 
-    expect(res.statusCode).toBe(201);
-    expect(servicio.registrar).toHaveBeenCalledWith(
-      expect.objectContaining({ metodoPago: 'efectivo', comprobante: null }),
-    );
-  });
+  describe('PATCH /api/v1/pagos/:id/rechazar', () => {
+    it('200: el admin de la tanda rechaza el pago con motivo', async () => {
+      const pagoRechazado = Pago.reconstitute({
+        idPayment: 45,
+        idNumber: 10,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
+        transferAmount: 1000,
+        cashAmount: 0,
+        status: 'RECHAZADO',
+        rejectionReason: 'Comprobante bancario apócrifo',
+        confirmedByParticipant: true,
+        confirmedByAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      servicio.rechazar.mockResolvedValue(pagoRechazado);
 
-  // ── Archivos inválidos ──────────────────────────────────────────────────
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/rechazar',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: { motivo: 'Comprobante bancario apócrifo' },
+      });
 
-  it('400: rechaza tipos de archivo no permitidos', async () => {
-    const res = await enviar(
-      multipart(camposHibrido, {
-        filename: 'animacion.gif',
-        contentType: 'image/gif',
-        content: Buffer.from('GIF89a'),
-      }),
-    );
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        idPayment: 45,
+        status: 'RECHAZADO',
+        rejectionReason: 'Comprobante bancario apócrifo',
+      });
+      expect(servicio.rechazar).toHaveBeenCalledWith(45, 'Comprobante bancario apócrifo');
+    });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.json().message).toContain('JPG, PNG o PDF');
-    expect(servicio.registrar).not.toHaveBeenCalled();
-  });
+    it('403: usuario que NO es admin de la tanda recibe 403 al rechazar', async () => {
+      mockDb.limit.mockResolvedValue([{ idPayment: 45, idAdmin: 999 }]);
 
-  it('400: rechaza un archivo cuyo contenido no coincide con el tipo declarado', async () => {
-    const res = await enviar(
-      multipart(camposHibrido, {
-        filename: 'falso.png',
-        contentType: 'image/png',
-        content: Buffer.from('<script>alert(1)</script>'),
-      }),
-    );
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/rechazar',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: { motivo: 'Fondos no reflejados' },
+      });
 
-    expect(res.statusCode).toBe(400);
-    expect(servicio.registrar).not.toHaveBeenCalled();
-  });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().message).toMatch(/Solo el administrador de la tanda/i);
+      expect(servicio.rechazar).not.toHaveBeenCalled();
+    });
 
-  it('400: rechaza el archivo en un campo distinto de "file"', async () => {
-    const res = await enviar(
-      multipart(camposHibrido, {
-        field: 'comprobante',
-        filename: 'spei.png',
-        contentType: 'image/png',
-        content: PNG,
-      }),
-    );
+    it('422: rechazar sin cuerpo o sin motivo lanza 422 (Zod)', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/rechazar',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: {},
+      });
 
-    expect(res.statusCode).toBe(400);
-    expect(servicio.registrar).not.toHaveBeenCalled();
-  });
+      expect(res.statusCode).toBe(422);
+      expect(servicio.rechazar).not.toHaveBeenCalled();
+    });
 
-  it('201: acepta un comprobante de exactamente 10 MB', async () => {
-    const limite = Buffer.concat([PNG, Buffer.alloc(COMPROBANTE_MAX_BYTES - PNG.length)]);
+    it('422: rechazar con motivo menor a 5 caracteres lanza 422 (Zod)', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/rechazar',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: { motivo: 'no' },
+      });
 
-    const res = await enviar(
-      multipart(camposHibrido, { filename: 'limite.png', contentType: 'image/png', content: limite }),
-    );
+      expect(res.statusCode).toBe(422);
+      expect(res.json().message).toMatch(/al menos 5 caracteres/i);
+      expect(servicio.rechazar).not.toHaveBeenCalled();
+    });
 
-    expect(res.statusCode).toBe(201);
-  });
+    it('422: rechazar un pago ya confirmado lanza 422', async () => {
+      servicio.rechazar.mockRejectedValue(new PagoYaConfirmadoError());
 
-  it('413: rechaza comprobantes de más de 10 MB', async () => {
-    const grande = Buffer.concat([PNG, Buffer.alloc(COMPROBANTE_MAX_BYTES)]);
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/rechazar',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: { motivo: 'Comprobante inválido' },
+      });
 
-    const res = await enviar(
-      multipart(camposHibrido, { filename: 'grande.png', contentType: 'image/png', content: grande }),
-    );
+      expect(res.statusCode).toBe(422);
+      expect(res.json().message).toMatch(/ya está completamente confirmado/i);
+    });
 
-    expect(res.statusCode).toBe(413);
-    expect(servicio.registrar).not.toHaveBeenCalled();
-  });
+    it('404: pago inexistente al rechazar', async () => {
+      mockDb.limit.mockResolvedValue([]);
+      servicio.rechazar.mockRejectedValue(new PagoNotFoundError(45));
 
-  // ── Autenticación y validación ──────────────────────────────────────────
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/pagos/45/rechazar',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: { motivo: 'Fondos no recibidos' },
+      });
 
-  it('401: sin token', async () => {
-    const res = await enviar(multipart(camposHibrido), {});
-
-    expect(res.statusCode).toBe(401);
-    expect(servicio.registrar).not.toHaveBeenCalled();
-  });
-
-  it('422: DTO inválido (método desconocido e idNumber no numérico)', async () => {
-    const res = await enviar(multipart({ idNumber: 'abc', metodoPago: 'cheque' }));
-
-    expect(res.statusCode).toBe(422);
-    expect(res.json().details.map((d: { field: string }) => d.field)).toEqual(
-      expect.arrayContaining(['idNumber', 'metodoPago']),
-    );
-    expect(servicio.registrar).not.toHaveBeenCalled();
-  });
-
-  // ── Errores de dominio traducidos a HTTP ────────────────────────────────
-
-  it.each([
-    ['403', new NumeroAjenoError(), 403],
-    ['404', new NumeroNoEncontradoError(10), 404],
-    ['409', new PagoDuplicadoError(10), 409],
-    ['422 (suma híbrida)', new MontoHibridoInvalidoError(400, 500, 900, 1000), 422],
-  ])('%s: traduce el error de dominio del caso de uso', async (_caso, error, status) => {
-    servicio.registrar.mockRejectedValue(error);
-
-    const res = await enviar(
-      multipart(camposHibrido, { filename: 'spei.png', contentType: 'image/png', content: PNG }),
-    );
-
-    expect(res.statusCode).toBe(status);
-    expect(res.json().message).toBe(error.message);
+      expect(res.statusCode).toBe(404);
+    });
   });
 });

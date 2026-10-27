@@ -31,6 +31,8 @@ export const PAGO_SERVICE_PORT = Symbol('PAGO_SERVICE_PORT');
 export interface PagoUseCasesPort {
   registrar(command: RegistrarPagoCommand): Promise<Pago>;
   obtenerPago(id: number): Promise<Pago>;
+  confirmar(id: number): Promise<Pago>;
+  rechazar(id: number, motivo: string): Promise<Pago>;
   confirmarOrganizador(id: number): Promise<Pago>;
   confirmarReceptor(id: number): Promise<Pago>;
   actualizarResultadoOcr(id: number, montoDetectado: number): Promise<Pago>;
