@@ -20,6 +20,15 @@ export interface RegistrarPagoCommand {
   comprobante?: ComprobanteArchivo | null;
 }
 
+/**
+ * Identidad y rol del usuario autenticado en la capa de casos de uso (agnóstica de transporte).
+ */
+export interface UsuarioAutenticado {
+  idUser: number;
+  email: string;
+  role: string;
+}
+
 export const PAGO_SERVICE_PORT = Symbol('PAGO_SERVICE_PORT');
 
 /**
@@ -31,7 +40,9 @@ export const PAGO_SERVICE_PORT = Symbol('PAGO_SERVICE_PORT');
 export interface PagoUseCasesPort {
   registrar(command: RegistrarPagoCommand): Promise<Pago>;
   obtenerPago(id: number): Promise<Pago>;
-  confirmarOrganizador(id: number): Promise<Pago>;
+  confirmar(id: number, usuario: UsuarioAutenticado): Promise<Pago>;
+  rechazar(id: number, motivo: string, usuario: UsuarioAutenticado): Promise<Pago>;
+  confirmarOrganizador(id: number, usuario?: UsuarioAutenticado): Promise<Pago>;
   confirmarReceptor(id: number): Promise<Pago>;
   actualizarResultadoOcr(id: number, montoDetectado: number): Promise<Pago>;
 }

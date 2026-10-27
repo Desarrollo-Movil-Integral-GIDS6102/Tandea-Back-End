@@ -11,6 +11,7 @@ export interface NumeroConCuota {
   tanda: {
     idTanda: number;
     contributionAmount: number;
+    idAdmin?: number;
   } | null;
 }
 

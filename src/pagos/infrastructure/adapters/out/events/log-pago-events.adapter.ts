@@ -1,15 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  PAGO_CONFIRMADO,
+  PAGO_RECHAZADO,
   PAGO_REGISTRADO,
+  PagoConfirmadoEvent,
   PagoEventsPort,
+  PagoRechazadoEvent,
   PagoRegistradoEvent,
 } from '../../../../domain/ports/out/pago-events.port';
 
 /**
- * Adaptador temporal de eventos: solo deja el evento en el log.
- *
- * TODO([BE-NOTIF] Emitir y escuchar eventos internos (pago.registrado, pago.confirmado)):
- * reemplazar por un adaptador sobre el bus de eventos que defina esa tarjeta.
+ * Adaptador temporal de eventos: registra los eventos de dominio en el log.
  */
 @Injectable()
 export class LogPagoEventsAdapter implements PagoEventsPort {
@@ -17,5 +18,13 @@ export class LogPagoEventsAdapter implements PagoEventsPort {
 
   async publicarPagoRegistrado(evento: PagoRegistradoEvent): Promise<void> {
     this.logger.log(`${PAGO_REGISTRADO} ${JSON.stringify(evento)}`);
+  }
+
+  async publicarPagoConfirmado(evento: PagoConfirmadoEvent): Promise<void> {
+    this.logger.log(`${PAGO_CONFIRMADO} ${JSON.stringify(evento)}`);
+  }
+
+  async publicarPagoRechazado(evento: PagoRechazadoEvent): Promise<void> {
+    this.logger.log(`${PAGO_RECHAZADO} ${JSON.stringify(evento)}`);
   }
 }

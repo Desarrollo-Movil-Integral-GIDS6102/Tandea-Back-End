@@ -42,6 +42,7 @@ export function toDomain(row: PaymentRow, evidenceUrl: string | null = null): Pa
     ocrDetectedAmount:
       row.ocrDetectedAmount != null ? parseFloat(row.ocrDetectedAmount) : null,
     ocrVerified: row.ocrVerified,
+    rejectionReason: row.rejectionReason ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -65,6 +66,7 @@ export function toPersistence(pago: Pago): NewPaymentRow {
     confirmedByParticipant: p.confirmedByParticipant,
     confirmedByAdmin: p.confirmedByAdmin,
     status: p.status,
+    rejectionReason: p.rejectionReason ?? null,
   };
 }
 
@@ -86,6 +88,7 @@ export function toResponseDto(pago: Pago): PagoResponseDto {
     ocrVerified: p.ocrVerified ?? false,
     ocrDetectedAmount: p.ocrDetectedAmount ?? null,
     evidenceUrl: p.evidenceUrl ?? null,
+    rejectionReason: p.rejectionReason ?? null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
