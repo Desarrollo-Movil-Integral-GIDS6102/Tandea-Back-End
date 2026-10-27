@@ -94,8 +94,6 @@ export class PagoService implements PagoUseCasesPort {
     }
 
     // 4. Subir el comprobante (opcional en efectivo)
-    // TODO: si la transacción del paso 6 falla, el archivo queda huérfano en el storage;
-    // agregar StoragePort.eliminar() o una limpieza periódica.
     const evidenceUrl = comprobante
       ? await this.storage.subir(comprobante.buffer, {
           carpeta: 'comprobantes',
@@ -172,17 +170,83 @@ export class PagoService implements PagoUseCasesPort {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CASO DE USO: CONFIRMAR ORGANIZADOR (1ra confirmación)
+  // CASO DE USO: CONFIRMAR PAGO POR EL ORGANIZADOR (AP-05)
   // ─────────────────────────────────────────────────────────────────────────
 
-  async confirmarOrganizador(id: number): Promise<Pago> {
+  async confirmar(id: number): Promise<Pago> {
     const pago = await this.obtenerPago(id);
 
     // Ejecuta las reglas de negocio en la entidad de dominio
     pago.confirmarPorOrganizador();
 
     // Persiste el estado actualizado
-    return this.pagoRepository.update(pago);
+    const pagoActualizado = await this.pagoRepository.update(pago);
+
+    // Emite el evento de dominio pago.confirmado
+    const numero = await this.pagoRepository.buscarNumeroConCuota(pago.idNumber);
+    const tandaId = numero?.tanda?.idTanda ?? 0;
+    const userId = numero?.idUser;
+    await this.publicarPagoConfirmado(pagoActualizado.idPayment!, tandaId, userId);
+
+    return pagoActualizado;
+  }
+
+  /**
+   * Alias de compatibilidad hacia confirmar(id).
+   */
+  async confirmarOrganizador(id: number): Promise<Pago> {
+    return this.confirmar(id);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CASO DE USO: RECHAZAR PAGO POR EL ORGANIZADOR (AP-05)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async rechazar(id: number, motivo: string): Promise<Pago> {
+    const pago = await this.obtenerPago(id);
+
+    // Ejecuta las reglas de negocio en la entidad de dominio
+    pago.rechazar(motivo);
+
+    // Persiste el estado actualizado
+    const pagoActualizado = await this.pagoRepository.update(pago);
+
+    // Emite el evento de dominio pago.rechazado
+    const numero = await this.pagoRepository.buscarNumeroConCuota(pago.idNumber);
+    const tandaId = numero?.tanda?.idTanda ?? 0;
+    const userId = numero?.idUser;
+    await this.publicarPagoRechazado(pagoActualizado.idPayment!, tandaId, motivo, userId);
+
+    return pagoActualizado;
+  }
+
+  private async publicarPagoConfirmado(
+    paymentId: number,
+    tandaId: number,
+    userId?: number | null,
+  ): Promise<void> {
+    try {
+      await this.eventos.publicarPagoConfirmado({ paymentId, tandaId, userId });
+    } catch (error: unknown) {
+      this.logger.error(
+        `No se pudo publicar pago.confirmado del pago ${paymentId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async publicarPagoRechazado(
+    paymentId: number,
+    tandaId: number,
+    motivo: string,
+    userId?: number | null,
+  ): Promise<void> {
+    try {
+      await this.eventos.publicarPagoRechazado({ paymentId, tandaId, motivo, userId });
+    } catch (error: unknown) {
+      this.logger.error(
+        `No se pudo publicar pago.rechazado del pago ${paymentId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -197,9 +261,6 @@ export class PagoService implements PagoUseCasesPort {
 
     // Persiste el estado actualizado
     const pagoActualizado = await this.pagoRepository.update(pago);
-
-    // TODO: Disparar evento de dominio a través de un puerto de eventos
-    // await this.eventBus.publish(new PagoConfirmadoEvent(pagoActualizado));
 
     return pagoActualizado;
   }

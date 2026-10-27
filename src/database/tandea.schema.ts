@@ -225,6 +225,7 @@ export const paymentTable = pgTable(
       .notNull()
       .default(false),
     confirmedByAdmin: boolean('confirmed_by_admin').notNull().default(false),
+    rejectionReason: text('rejection_reason'),
     status: paymentStatusEnum('status').notNull().default('PENDIENTE'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
