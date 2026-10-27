@@ -260,7 +260,10 @@ export const payoutTable = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('payout_id_number_idx').on(t.idNumber)],
+  (t) => [
+    index('payout_id_number_idx').on(t.idNumber),
+    index('payout_id_number_status_idx').on(t.idNumber, t.status),
+  ],
 );
 
 // -----------------------------------------------------------------------------
