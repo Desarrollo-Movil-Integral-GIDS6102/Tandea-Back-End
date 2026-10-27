@@ -17,7 +17,9 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   // ── Prefijo global de la API ──────────────────────────────────────────────
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['health', ''],
+  });
 
   // ── CORS ──────────────────────────────────────────────────────────────────
   const corsOriginEnv = process.env.CORS_ORIGIN ?? '*';
