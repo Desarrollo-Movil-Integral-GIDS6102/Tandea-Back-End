@@ -225,6 +225,7 @@ export const paymentTable = pgTable(
       .notNull()
       .default(false),
     confirmedByAdmin: boolean('confirmed_by_admin').notNull().default(false),
+    rejectionReason: text('rejection_reason'),
     status: paymentStatusEnum('status').notNull().default('PENDIENTE'),
     rejectionReason: text('rejection_reason'),
     createdAt: createdAt(),
@@ -261,7 +262,10 @@ export const payoutTable = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('payout_id_number_idx').on(t.idNumber)],
+  (t) => [
+    index('payout_id_number_idx').on(t.idNumber),
+    index('payout_id_number_status_idx').on(t.idNumber, t.status),
+  ],
 );
 
 // -----------------------------------------------------------------------------

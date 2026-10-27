@@ -36,6 +36,7 @@ import {
   validarComprobante,
 } from '../multipart/comprobante.file';
 import { JwtAuthGuard } from '../../../../../../auth/infrastructure/adapters/in/http/guards/jwt-auth.guard';
+import { TandaMemberGuard } from '../../../../../../auth/infrastructure/adapters/in/http/guards/tanda-member.guard';
 import { CurrentUser } from '../../../../../../auth/infrastructure/adapters/in/http/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../../../../auth/infrastructure/adapters/in/http/strategies/jwt.strategy';
 
@@ -45,9 +46,10 @@ import type { AuthenticatedUser } from '../../../../../../auth/infrastructure/ad
  * Responsabilidades:
  *  1. Recibir y responder peticiones sobre HTTP.
  *  2. Validar el payload de entrada con Zod y el comprobante (tipo, firma y tamaño).
- *  3. Invocar al puerto de entrada (casos de uso).
- *  4. Mapear la entidad de dominio a DTO de respuesta y validarlo.
- *  5. Capturar y traducir errores mediante PagoDomainExceptionFilter.
+ *  3. Proteger endpoints de administración de tanda con TandaMemberGuard.
+ *  4. Invocar al puerto de entrada (casos de uso).
+ *  5. Mapear la entidad de dominio a DTO de respuesta y validarlo.
+ *  6. Capturar y traducir errores mediante PagoDomainExceptionFilter.
  */
 @Controller('pagos')
 @UseGuards(JwtAuthGuard)
@@ -130,6 +132,7 @@ export class PagoController {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Patch(':id/confirmar-organizador')
+  @UseGuards(TandaMemberGuard)
   async confirmarOrganizador(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthenticatedUser,

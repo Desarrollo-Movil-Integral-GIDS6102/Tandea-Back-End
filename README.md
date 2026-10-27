@@ -469,16 +469,45 @@ Todas las rutas tienen el prefijo global: **`/api/v1`**.
   - `200 OK`: Retorna el objeto `PagoResponseDto`.
   - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
 
-#### 3. Confirmación del Organizador (1ra Confirmación)
+#### 3. Confirmación del Pago por el Organizador (AP-05)
 * **Método:** `PATCH`
-* **Ruta:** `/api/v1/pagos/:id/confirmar-organizador`
-* **Descripción:** El organizador valida que recibió el pago en efectivo o verificó la transferencia.
-* **Transición de Estado:** Pasa de `pendiente` a `confirmado_parcial`.
+* **Ruta:** `/api/v1/pagos/:id/confirmar`
+* **Autorización:** Protegido con `TandaMemberGuard`. Solo el organizador / administrador de la tanda (`id_admin`) o administradores globales (`admin_global`) pueden ejecutarlo.
+* **Descripción:** El organizador valida que recibió el pago. Actualiza `confirmed_by_admin = true` y recalcula dinámicamente el estado.
+* **Transición de Estado:** Pasa de `pendiente` a `confirmado_parcial` (o a `confirmado` si el receptor ya hubiese confirmado).
+* **Eventos de Dominio:** Emite `pago.confirmado`.
 * **Respuestas:**
-  - `200 OK`: Retorna el pago actualizado.
-  - `422 Unprocessable Entity`: Si el pago ya fue confirmado previamente o ya está completamente cerrado.
+  - `200 OK`: Retorna el objeto `PagoResponseDto` actualizado.
+  - `401 Unauthorized`: Token JWT ausente o inválido.
+  - `403 Forbidden`: Si el usuario autenticado no es el organizador (`id_admin`) de la tanda.
+  - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
+  - `422 Unprocessable Entity`: Si el pago ya fue confirmado previamente o ya está rechazado (`PagoYaConfirmadoError`, `PagoYaRechazadoError`).
 
-#### 4. Confirmación del Receptor (2da Confirmación)
+*(Nota: la ruta `/api/v1/pagos/:id/confirmar-organizador` se mantiene disponible por retrocompatibilidad).*
+
+#### 4. Rechazo del Pago por el Organizador (AP-05)
+* **Método:** `PATCH`
+* **Ruta:** `/api/v1/pagos/:id/rechazar`
+* **Autorización:** Protegido con `TandaMemberGuard`. Solo el organizador / administrador de la tanda (`id_admin`) o administradores globales (`admin_global`) pueden ejecutarlo.
+* **Descripción:** El organizador rechaza el pago indicando el motivo correspondiente. Guarda `rejection_reason` y pasa el estado a `rechazado`.
+* **Cuerpo de la Petición (`Content-Type: application/json`):**
+```json
+{
+  "motivo": "El comprobante adjunto es ilegible o no coincide con los movimientos de la cuenta receptora"
+}
+```
+*(Validación con Zod: `motivo` string obligatorio, mínimo 5 caracteres, máximo 500 caracteres).*
+* **Transición de Estado:** Pasa a `rechazado`.
+* **Eventos de Dominio:** Emite `pago.rechazado`.
+* **Respuestas:**
+  - `200 OK`: Retorna el objeto `PagoResponseDto` con `estado: "rechazado"` y `rejectionReason`.
+  - `400 Bad Request / 422 Unprocessable Entity`: Si el cuerpo de la petición no cumple el esquema de validación Zod.
+  - `401 Unauthorized`: Token JWT ausente o inválido.
+  - `403 Forbidden`: Si el usuario autenticado no es el organizador (`id_admin`) de la tanda.
+  - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
+  - `422 Unprocessable Entity`: Si el pago ya fue confirmado o ya se encuentra rechazado (`PagoYaConfirmadoError`, `PagoYaRechazadoError`).
+
+#### 5. Confirmación del Receptor (2da Confirmación)
 * **Método:** `PATCH`
 * **Ruta:** `/api/v1/pagos/:id/confirmar-receptor`
 * **Descripción:** El receptor (ganador de la tanda) confirma la recepción del dinero.
@@ -555,7 +584,7 @@ El archivo `railway.json` orquesta automáticamente el ciclo de vida del desplie
 - **Build Command:** `npm run build` (compila la aplicación NestJS en `dist/`).
 - **Pre-Deploy Command:** `npm run db:migrate` (aplica las migraciones pendientes de Drizzle ORM a PostgreSQL antes de que entre en servicio la nueva versión).
 - **Start Command:** `npm run start:prod` (inicia el servidor de producción con `node dist/main.js`).
-- **Healthcheck Path:** `/api/v1/health` (Railway sondea esta ruta para validar que el contenedor esté listo antes de dirigir el tráfico de red).
+- **Healthcheck Path:** `/health` (Railway sondea esta ruta para validar que el contenedor esté listo antes de dirigir el tráfico de red).
 
 ### Verificación del Health Check
 
@@ -563,10 +592,10 @@ Una vez desplegado el servicio, puedes verificar la disponibilidad del backend m
 
 ```bash
 # En el entorno desplegado en Railway:
-curl https://<tu-servicio>.up.railway.app/api/v1/health
+curl https://<tu-servicio>.up.railway.app/health
 
 # En entorno local:
-curl http://localhost:3000/api/v1/health
+curl http://localhost:3000/health
 ```
 
 **Respuesta esperada (HTTP 200 OK):**

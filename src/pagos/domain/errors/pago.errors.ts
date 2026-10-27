@@ -98,6 +98,18 @@ export class PagoRechazadoError extends DomainError {
   }
 }
 
+export class PagoYaRechazadoError extends DomainError {
+  constructor() {
+    super('Este pago ya fue rechazado previamente');
+  }
+}
+
+export class MotivoRechazoRequeridoError extends DomainError {
+  constructor() {
+    super('El motivo de rechazo es obligatorio');
+  }
+}
+
 export class ComprobanteRequeridoError extends ReglaNegocioPagoError {
   constructor(metodoPago: string) {
     super(`El pago por "${metodoPago}" requiere adjuntar el comprobante en el campo "file"`);

@@ -5,6 +5,7 @@ import {
   ComprobanteRequeridoError,
   ConfirmacionOrganizadorPreviaError,
   MontoHibridoInvalidoError,
+  MotivoRechazoRequeridoError,
   NumeroAjenoError,
   NumeroNoEncontradoError,
   PagoDuplicadoError,
@@ -485,7 +486,6 @@ describe('PagoService', () => {
       expect(resultado.confirmedByAdmin).toBe(true);
       expect(repo.update).toHaveBeenCalledOnce();
     });
-  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // CASO DE USO: RECHAZAR PAGO (AP-05)
@@ -547,6 +547,26 @@ describe('PagoService', () => {
         motivo,
       });
     });
+  });
+
+  describe('rechazar (AP-05)', () => {
+    it('rechaza el pago con motivo, pasa estado a "rechazado" y emite pago.rechazado', async () => {
+      const pago = Pago.reconstitute({
+        idPayment: 200,
+        idNumber: ID_NUMBER,
+        transferAmount: 1000,
+        cashAmount: 0,
+        totalAmount: 1000,
+        metodoPago: 'transferencia',
+        status: 'PENDIENTE',
+        confirmedByParticipant: true,
+        confirmedByAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      repo.findById.mockResolvedValue(pago);
+      repo.update.mockImplementation(async (p: Pago) => p);
 
     it('administrador global puede rechazar pago', async () => {
       const pago = pagoPendiente();

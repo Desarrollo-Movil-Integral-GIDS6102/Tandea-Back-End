@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
+import { AuthModule } from '../auth/auth.module';
 
 // Inbound Adapters (HTTP)
 import { PagoController } from './infrastructure/adapters/in/http/controllers/pago.controller';
@@ -39,7 +40,7 @@ import { LogPagoEventsAdapter } from './infrastructure/adapters/out/events/log-p
  *  - Puerto de Entrada: PAGO_SERVICE_PORT ➔ Servicio de Aplicación: PagoService
  */
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AuthModule],
   controllers: [PagoController],
   providers: [
     // Vinculación del Puerto de Salida con el Adaptador de Persistencia
