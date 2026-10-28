@@ -43,7 +43,6 @@ export function toDomain(row: PaymentRow, evidenceUrl: string | null = null): Pa
     ocrDetectedAmount:
       row.ocrDetectedAmount != null ? parseFloat(row.ocrDetectedAmount) : null,
     ocrVerified: row.ocrVerified,
-    rejectionReason: row.rejectionReason ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
