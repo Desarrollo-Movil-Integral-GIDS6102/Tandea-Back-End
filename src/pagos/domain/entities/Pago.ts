@@ -4,7 +4,9 @@ import {
   ConfirmacionParticipantePreviaError,
   OrganizadorDebeConfirmarPrimeroError,
   PagoRechazadoError,
+  PagoYaRechazadoError,
   PagoYaConfirmadoError,
+  MotivoRechazoRequeridoError,
 } from '../errors/pago.errors';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'hibrido';
@@ -226,7 +228,16 @@ export class Pago {
   }
 
   get estado(): string {
-    return this.props.status.toLowerCase();
+    if (this.props.status === 'CONFIRMADO') {
+      return 'confirmado';
+    }
+    if (this.props.status === 'RECHAZADO') {
+      return 'rechazado';
+    }
+    if (this.props.confirmedByAdmin) {
+      return 'confirmado_parcial';
+    }
+    return 'pendiente';
   }
 
   get comprobanteUrl(): string | null {
@@ -364,14 +375,20 @@ export class Pago {
    * Rechaza el pago por fondos no recibidos o comprobante inválido.
    * Guarda el motivo del rechazo si se proporciona.
    */
-  public rechazar(motivo?: string): void {
+  public rechazar(motivo: string): void {
     if (this.estaConfirmado()) {
       throw new PagoYaConfirmadoError();
     }
-    this.props.status = 'RECHAZADO';
-    if (motivo !== undefined) {
-      this.props.rejectionReason = motivo;
+    if (this.props.status === 'RECHAZADO') {
+      throw new PagoYaRechazadoError();
     }
+    const motivoNormalizado = motivo.trim();
+    if (!motivoNormalizado) {
+      throw new MotivoRechazoRequeridoError();
+    }
+
+    this.props.status = 'RECHAZADO';
+    this.props.rejectionReason = motivoNormalizado;
     this.props.updatedAt = new Date();
   }
 
@@ -396,4 +413,3 @@ export class Pago {
 }
 
 export { PagoFactory, type CrearPagoFactoryDto } from '../factories/pago.factory';
-
