@@ -105,7 +105,6 @@ export const zPagoResponse = z.object({
   status: zEstadoPago,
   confirmedByParticipant: z.boolean(),
   confirmedByAdmin: z.boolean(),
-  rejectionReason: z.string().nullable().optional(),
   ocrVerified: z.boolean(),
   ocrDetectedAmount: z.number().nullable(),
   evidenceUrl: z.string().url().nullable(),
