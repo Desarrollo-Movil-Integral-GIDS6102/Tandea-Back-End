@@ -118,6 +118,25 @@ export const userTable = pgTable(
 );
 
 // -----------------------------------------------------------------------------
+// password_reset_code  (código de 6 dígitos para cambiar contraseña, se guarda hasheado)
+// -----------------------------------------------------------------------------
+export const passwordResetCodeTable = pgTable(
+  'password_reset_code',
+  {
+    idCode: serial('id_code').primaryKey(),
+    idUser: integer('id_user')
+      .notNull()
+      .references(() => userTable.idUser),
+    codeHash: varchar('code_hash', { length: 255 }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('password_reset_code_id_user_idx').on(t.idUser)],
+);
+
+// -----------------------------------------------------------------------------
 // tanda_type  (catálogo, sin deleted_at)
 // -----------------------------------------------------------------------------
 export const tandaTypeTable = pgTable('tanda_type', {

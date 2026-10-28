@@ -34,7 +34,10 @@ export interface ListTandasQuery {
 }
 
 export interface PaginatedTandasResult {
-  data: (TandaProps & { rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL' })[];
+  data: (TandaProps & {
+    rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL';
+    indicadorPago: 'al_dia' | 'pendiente';
+  })[];
   total: number;
   page: number;
   limit: number;
@@ -44,24 +47,31 @@ export interface PaginatedTandasResult {
 export interface TandaDetalle extends TandaProps {
   rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL';
   participantes?: NumberRecord[];
+  misNumeros?: NumberRecord[];
+  numerosDisponibles?: number[];
 }
+
+export type TandaConDisponibles = TandaProps & { numerosDisponibles: number[] };
 
 export interface JoinTandaCommand {
   inviteCode: string;
   idUser: number;
-  selectedNumber?: number;
+  /** Números elegidos; si se omite se asignan los primeros `cantidad` libres. */
+  selectedNumbers?: number[];
+  cantidad?: number;
 }
 
 export interface JoinTandaResult {
   tanda: Tanda;
   numeroAsignado: number;
+  numerosAsignados: number[];
   isDeadNumber: boolean;
 }
 
 export interface TandaUseCasesPort {
   crearTanda(command: CreateTandaCommand): Promise<Tanda>;
   obtenerTandaPorId(idTanda: number, userId: number, role: string): Promise<TandaDetalle>;
-  obtenerPorCodigoInvitacion(inviteCode: string): Promise<Tanda>;
+  obtenerPorCodigoInvitacion(inviteCode: string): Promise<TandaConDisponibles>;
   listarTandas(query: ListTandasQuery, userId: number, role: string): Promise<PaginatedTandasResult>;
   actualizarTanda(idTanda: number, command: UpdateTandaCommand, userId: number, role: string): Promise<Tanda>;
   cambiarEstadoTanda(idTanda: number, status: TandaStatus, userId: number, role: string): Promise<Tanda>;

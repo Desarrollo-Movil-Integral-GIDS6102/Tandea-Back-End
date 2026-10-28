@@ -44,7 +44,9 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
 
     mockNumberRepo = {
       createNumber: vi.fn(),
-      findOccupiedNumbers: vi.fn(),
+      createNumbers: vi.fn(),
+      countNumbersWithoutPayment: vi.fn().mockResolvedValue(0),
+      findOccupiedNumbers: vi.fn().mockResolvedValue([]),
       findByUserInTanda: vi.fn(),
       countParticipants: vi.fn(),
       findNumbersByTanda: vi.fn(),
@@ -93,7 +95,7 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(mockNumberRepo.createNumber).toHaveBeenCalledWith({
         idTanda: 1,
         roundNumber: 1,
-        numberValue: 5,
+        numberValue: 6,
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
@@ -242,6 +244,7 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tanda);
       vi.spyOn(mockTandaRepo, 'updateStatus').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 5]);
 
       await service.cambiarEstadoTanda(1, 'ACTIVA', 10, 'usuario');
 
@@ -270,60 +273,99 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
     });
   });
 
+  describe('Iniciar Tanda', () => {
+    it('debe rechazar iniciar la tanda si faltan números por apartar', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2]);
+
+      await expect(service.cambiarEstadoTanda(1, 'ACTIVA', 10, 'usuario')).rejects.toThrow(
+        'Faltan 3 números',
+      );
+      expect(mockTandaRepo.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Unirse a Tanda (Join)', () => {
     it('debe permitir unirse a una tanda asignando el número seleccionado', async () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(1);
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
-      vi.spyOn(mockNumberRepo, 'createNumber').mockResolvedValue({} as any);
 
       const res = await service.unirseTanda({
         inviteCode: 'TND-TEST01',
         idUser: 30,
-        selectedNumber: 3,
+        selectedNumbers: [3],
       });
 
       expect(res.numeroAsignado).toBe(3);
-      expect(mockNumberRepo.createNumber).toHaveBeenCalledWith(
-        expect.objectContaining({
-          numberValue: 3,
-          idUser: 30,
-        }),
-      );
+      expect(mockNumberRepo.createNumbers).toHaveBeenCalledWith([
+        expect.objectContaining({ numberValue: 3, idUser: 30 }),
+      ]);
+    });
+
+    it('debe permitir apartar varios números al mismo usuario aunque ya esté en la tanda', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
+
+      const res = await service.unirseTanda({
+        inviteCode: 'TND-TEST01',
+        idUser: 10,
+        selectedNumbers: [2, 4, 4],
+      });
+
+      expect(res.numerosAsignados).toEqual([2, 4]);
+      expect(mockNumberRepo.createNumbers).toHaveBeenCalledOnce();
     });
 
     it('debe rechazar si el turno seleccionado ya está tomado', async () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(2);
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2]);
 
       await expect(
         service.unirseTanda({
           inviteCode: 'TND-TEST01',
           idUser: 30,
-          selectedNumber: 2,
+          selectedNumbers: [2],
         }),
       ).rejects.toThrow(ConflictException);
     });
 
-    it('debe asignar automáticamente el primer número libre si no se especifica', async () => {
+    it('debe asignar automáticamente los primeros números libres según la cantidad', async () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(1);
-      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
-      vi.spyOn(mockNumberRepo, 'createNumber').mockResolvedValue({} as any);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 3]);
 
       const res = await service.unirseTanda({
         inviteCode: 'TND-TEST01',
         idUser: 30,
+        cantidad: 2,
       });
 
-      expect(res.numeroAsignado).toBe(2);
+      expect(res.numerosAsignados).toEqual([2, 4]);
+    });
+
+    it('el número muerto no ocupa lugar: una tanda de 3 admite 3 números de personas', async () => {
+      const tanda = new Tanda({ ...mockTandaData, numParticipants: 3, hasDeadNumber: true });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      // #1 y #2 apartados, #4 es el número muerto
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 4]);
+
+      const res = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30 });
+
+      expect(res.numeroAsignado).toBe(3);
+      expect(mockTandaRepo.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('debe rechazar unirse si la tanda ya inició', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30 }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

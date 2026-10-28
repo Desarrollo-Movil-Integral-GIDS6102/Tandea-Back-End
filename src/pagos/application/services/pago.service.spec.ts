@@ -45,7 +45,7 @@ function numero(overrides: Partial<NumeroConCuota> = {}): NumeroConCuota {
     idNumber: ID_NUMBER,
     idUser: ID_USER,
     roundNumber: 1,
-    tanda: { idTanda: ID_TANDA, contributionAmount: 1000, idAdmin: ID_ORGANIZADOR },
+    tanda: { idTanda: ID_TANDA, contributionAmount: 1000, idAdmin: ID_ORGANIZADOR, status: 'ACTIVA' },
     ...overrides,
   };
 }
@@ -205,7 +205,7 @@ describe('PagoService', () => {
 
       it('acepta 0.1 + 0.2 = 0.3 comparando en centavos', async () => {
         repo.buscarNumeroConCuota.mockResolvedValue(
-          numero({ tanda: { idTanda: ID_TANDA, contributionAmount: 0.3, idAdmin: ID_ORGANIZADOR } }),
+          numero({ tanda: { idTanda: ID_TANDA, contributionAmount: 0.3, idAdmin: ID_ORGANIZADOR, status: 'ACTIVA' } }),
         );
 
         await registrar({ metodoPago: 'hibrido', transferAmount: 0.1, cashAmount: 0.2 });
@@ -309,6 +309,15 @@ describe('PagoService', () => {
         repo.buscarNumeroConCuota.mockResolvedValue(numero({ tanda: null }));
 
         await expect(registrar()).rejects.toThrowError(TandaNoEncontradaError);
+      });
+
+      it('rechaza el pago si la tanda aún no fue iniciada por el organizador', async () => {
+        repo.buscarNumeroConCuota.mockResolvedValue(
+          numero({ tanda: { idTanda: ID_TANDA, contributionAmount: 1000, status: 'PENDIENTE' } }),
+        );
+
+        await expect(registrar()).rejects.toThrowError(/inicia la tanda/);
+        expect(repo.create).not.toHaveBeenCalled();
       });
 
       it('si falla la publicación del evento, igual responde con el pago guardado', async () => {

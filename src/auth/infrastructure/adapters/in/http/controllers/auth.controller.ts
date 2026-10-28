@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   HttpCode,
   HttpStatus,
@@ -26,6 +27,14 @@ import {
   REGISTER_USE_CASE_PORT,
   type RegisterUseCasePort,
 } from '../../../../../domain/ports/in/register-use-case.port';
+import {
+  PERFIL_USE_CASE_PORT,
+  type PerfilUseCasePort,
+} from '../../../../../domain/ports/in/perfil-use-case.port';
+import {
+  zActualizarPerfilDto,
+  zCambiarPasswordDto,
+} from '../../../../../application/dtos/perfil.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -39,7 +48,58 @@ export class AuthController {
     private readonly loginService: LoginUseCasePort,
     @Inject(REGISTER_USE_CASE_PORT)
     private readonly registerService: RegisterUseCasePort,
+    @Inject(PERFIL_USE_CASE_PORT)
+    private readonly perfilService: PerfilUseCasePort,
   ) {}
+
+  /**
+   * GET /api/v1/auth/perfil
+   * Datos del usuario autenticado leídos de la base (no del token).
+   */
+  @Get('perfil')
+  @UseGuards(JwtAuthGuard)
+  async obtenerPerfil(@CurrentUser() user: AuthenticatedUser) {
+    return { data: await this.perfilService.obtenerPerfil(user.idUser) };
+  }
+
+  /**
+   * PATCH /api/v1/auth/perfil
+   * Edita nombre, apellido, edad y género. El correo no se puede cambiar.
+   */
+  @Patch('perfil')
+  @UseGuards(JwtAuthGuard)
+  async actualizarPerfil(@Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
+    const dto = zActualizarPerfilDto.parse(body ?? {});
+    return {
+      mensaje: 'Perfil actualizado',
+      data: await this.perfilService.actualizarPerfil(user.idUser, dto),
+    };
+  }
+
+  /**
+   * POST /api/v1/auth/perfil/password/codigo
+   * Envía un código de 6 dígitos al correo del usuario para cambiar la contraseña.
+   */
+  @Post('perfil/password/codigo')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async solicitarCodigoPassword(@CurrentUser() user: AuthenticatedUser) {
+    await this.perfilService.solicitarCodigoPassword(user.idUser);
+    return { mensaje: 'Te enviamos un código de 6 dígitos a tu correo' };
+  }
+
+  /**
+   * POST /api/v1/auth/perfil/password
+   * Cambia la contraseña validando el código recibido por correo.
+   */
+  @Post('perfil/password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async cambiarPassword(@Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
+    const dto = zCambiarPasswordDto.parse(body ?? {});
+    await this.perfilService.cambiarPassword(user.idUser, dto.codigo, dto.nuevaPassword);
+    return { mensaje: 'Contraseña actualizada' };
+  }
 
   /**
    * POST /api/v1/auth/register

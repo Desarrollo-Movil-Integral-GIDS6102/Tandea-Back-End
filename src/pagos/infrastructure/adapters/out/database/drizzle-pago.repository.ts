@@ -74,6 +74,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         idTanda: tandaTable.idTanda,
         contributionAmount: tandaTable.contributionAmount,
         idAdmin: tandaTable.idAdmin,
+        status: tandaTable.status,
       })
       .from(numberTable)
       .leftJoin(
@@ -100,6 +101,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
               idTanda: row.idTanda,
               contributionAmount: parseFloat(row.contributionAmount),
               idAdmin: row.idAdmin ?? undefined,
+              status: row.status ?? 'PENDIENTE',
             }
           : null,
     };

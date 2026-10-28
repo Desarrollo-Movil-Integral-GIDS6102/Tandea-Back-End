@@ -76,7 +76,9 @@ export class TandaController {
     const result = await this.tandaService.unirseTanda({
       inviteCode: dto.inviteCode,
       idUser: user.idUser,
-      selectedNumber: dto.selectedNumber,
+      selectedNumbers:
+        dto.selectedNumbers ?? (dto.selectedNumber ? [dto.selectedNumber] : undefined),
+      cantidad: dto.cantidad,
     });
 
     return {
@@ -85,6 +87,7 @@ export class TandaController {
       data: {
         tanda: result.tanda.toPrimitives(),
         numeroAsignado: result.numeroAsignado,
+        numerosAsignados: result.numerosAsignados,
         isDeadNumber: result.isDeadNumber,
       },
     };
@@ -149,7 +152,7 @@ export class TandaController {
     const tanda = await this.tandaService.obtenerPorCodigoInvitacion(inviteCode);
     return {
       statusCode: HttpStatus.OK,
-      data: tanda.toPrimitives(),
+      data: tanda,
     };
   }
 

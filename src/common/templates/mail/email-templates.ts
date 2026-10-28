@@ -53,4 +53,22 @@ export const EmailTemplates = {
       `),
     };
   },
+
+  /**
+   * Código de 6 dígitos para cambiar la contraseña desde el perfil
+   */
+  passwordCode(name: string, code: string, minutos: number): { subject: string; html: string } {
+    return {
+      subject: `Tu código para cambiar la contraseña: ${code}`,
+      html: layout(`
+        <h2 style="color: #1b4f72; margin-top: 0;">Hola, ${name} 🔐</h2>
+        <p>Recibimos una solicitud para cambiar la contraseña de tu cuenta de <b>Tandea</b>. Usa este código en la aplicación:</p>
+        <div style="background: #eaf3fa; border: 2px dashed #1b4f72; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+          <strong style="font-size: 32px; letter-spacing: 8px; color: #1b4f72;">${code}</strong>
+        </div>
+        <p>El código vence en <b>${minutos} minutos</b> y solo se puede usar una vez.</p>
+        <p style="font-size: 14px; color: #5a7280;">Si no fuiste tú, ignora este mensaje: tu contraseña no cambiará.</p>
+      `),
+    };
+  },
 };

@@ -35,6 +35,8 @@ describe('[AP-02] ElegirNumeroService (Caso de uso Elegir Número)', () => {
   beforeEach(() => {
     mockNumberRepo = {
       createNumber: vi.fn(),
+      createNumbers: vi.fn(),
+      countNumbersWithoutPayment: vi.fn().mockResolvedValue(0),
       findOccupiedNumbers: vi.fn(),
       findByUserInTanda: vi.fn(),
       countParticipants: vi.fn(),

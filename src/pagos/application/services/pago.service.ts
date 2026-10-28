@@ -6,6 +6,7 @@ import {
   NumeroNoEncontradoError,
   PagoDuplicadoError,
   PagoNotFoundError,
+  ReglaNegocioPagoError,
   TandaNoEncontradaError,
   UsuarioNoAutorizadoError,
 } from '../../domain/errors/pago.errors';
@@ -73,6 +74,11 @@ export class PagoService implements PagoUseCasesPort {
     }
     if (numero.idUser !== idUser) {
       throw new NumeroAjenoError();
+    }
+    if (numero.tanda.status !== 'ACTIVA') {
+      throw new ReglaNegocioPagoError(
+        'Los pagos se habilitan cuando el organizador inicia la tanda',
+      );
     }
 
     // 2. Un solo pago pendiente/confirmado por número (cada número es de una vuelta)

@@ -18,6 +18,7 @@ import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import {
   tandaTable,
   numberTable,
+  paymentTable,
   userTable,
 } from '../../../../../database/tandea.schema';
 import { Tanda, TandaStatus } from '../../../../domain/entities/tanda.entity';
@@ -276,6 +277,28 @@ export class DrizzleTandaRepository
     };
   }
 
+  async createNumbers(data: CreateNumberData[]): Promise<void> {
+    try {
+      await this.db.insert(numberTable).values(
+        data.map((d) => ({
+          idTanda: d.idTanda,
+          roundNumber: d.roundNumber,
+          numberValue: d.numberValue,
+          idUser: d.idUser,
+          isDeadNumber: d.isDeadNumber,
+          status: d.status as any,
+        })),
+      );
+    } catch (error: any) {
+      // Otro usuario apartó alguno de los números entre la consulta y el insert
+      const code = error?.code || error?.cause?.code;
+      if (code === '23505') {
+        throw new NumeroYaTomadoError(data[0].numberValue, data[0].roundNumber);
+      }
+      throw error;
+    }
+  }
+
   async findOccupiedNumbers(
     idTanda: number,
     roundNumber: number,
@@ -328,11 +351,36 @@ export class DrizzleTandaRepository
         and(
           eq(numberTable.idTanda, idTanda),
           eq(numberTable.roundNumber, 1),
+          eq(numberTable.isDeadNumber, false),
           isNull(numberTable.deletedAt),
         ),
       );
 
     return Number(res?.total || 0);
+  }
+
+  async countNumbersWithoutPayment(idTanda: number, idUser?: number): Promise<number> {
+    const [res] = await this.db
+      .select({ total: count() })
+      .from(numberTable)
+      .leftJoin(
+        paymentTable,
+        and(
+          eq(paymentTable.idNumber, numberTable.idNumber),
+          inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+        ),
+      )
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.isDeadNumber, false),
+          isNull(numberTable.deletedAt),
+          isNull(paymentTable.idPayment),
+          idUser !== undefined ? eq(numberTable.idUser, idUser) : undefined,
+        ),
+      );
+
+    return Number(res?.total ?? 0);
   }
 
   async findNumbersByTanda(idTanda: number): Promise<NumberRecord[]> {
