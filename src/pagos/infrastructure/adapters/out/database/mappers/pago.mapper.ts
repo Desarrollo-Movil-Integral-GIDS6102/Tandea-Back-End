@@ -89,7 +89,6 @@ export function toResponseDto(pago: Pago): PagoResponseDto {
     ocrVerified: p.ocrVerified ?? false,
     ocrDetectedAmount: p.ocrDetectedAmount ?? null,
     evidenceUrl: p.evidenceUrl ?? null,
-    rejectionReason: p.rejectionReason ?? null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
