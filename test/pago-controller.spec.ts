@@ -323,7 +323,11 @@ describe('PagoController', () => {
         confirmedByAdmin: true,
         status: 'PENDIENTE',
       });
-      expect(servicio.confirmar).toHaveBeenCalledWith(45);
+      expect(servicio.confirmar).toHaveBeenCalledWith(45, {
+        idUser: 7,
+        email: 'ana@tandea.test',
+        role: 'participante',
+      });
     });
 
     it('403: usuario que NO es admin de la tanda es rechazado por TandaMemberGuard', async () => {
@@ -430,7 +434,15 @@ describe('PagoController', () => {
         status: 'RECHAZADO',
         rejectionReason: 'Comprobante bancario apócrifo',
       });
-      expect(servicio.rechazar).toHaveBeenCalledWith(45, 'Comprobante bancario apócrifo');
+      expect(servicio.rechazar).toHaveBeenCalledWith(
+        45,
+        'Comprobante bancario apócrifo',
+        {
+          idUser: 7,
+          email: 'ana@tandea.test',
+          role: 'participante',
+        },
+      );
     });
 
     it('403: usuario que NO es admin de la tanda recibe 403 al rechazar', async () => {
