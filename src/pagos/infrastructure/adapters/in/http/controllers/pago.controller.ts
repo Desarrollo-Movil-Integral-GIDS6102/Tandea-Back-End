@@ -104,6 +104,7 @@ export class PagoController {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Patch(':id/confirmar')
+  @UseGuards(TandaMemberGuard)
   async confirmar(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthenticatedUser,
@@ -117,6 +118,7 @@ export class PagoController {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Patch(':id/rechazar')
+  @UseGuards(TandaMemberGuard)
   async rechazar(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: unknown,
