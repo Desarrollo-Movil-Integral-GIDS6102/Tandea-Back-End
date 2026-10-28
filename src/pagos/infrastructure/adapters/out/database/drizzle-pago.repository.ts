@@ -139,8 +139,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         confirmedByAdmin: data.confirmedByAdmin,
         rejectionReason: data.rejectionReason,
         ocrDetectedAmount: data.ocrDetectedAmount,
-        ocrVerified: data.ocrVerified,
-        rejectionReason: data.rejectionReason,
+        ocrVerified: data.ocrVerified
       })
       .where(eq(paymentTable.idPayment, data.idPayment!))
       .returning();
