@@ -83,10 +83,10 @@ export type RegistrarPagoDto = z.infer<typeof zRegistrarPago>;
 
 export const zRechazarPago = z.object({
   motivo: z
-    .string({ required_error: 'El motivo es obligatorio', invalid_type_error: 'El motivo debe ser texto' })
+    .string({ required_error: 'El motivo de rechazo es obligatorio' })
     .trim()
-    .min(5, { message: 'El motivo de rechazo debe contener al menos 5 caracteres' })
-    .max(500, { message: 'El motivo de rechazo no debe exceder 500 caracteres' }),
+    .min(5, { message: 'El motivo debe tener al menos 5 caracteres' })
+    .max(500, { message: 'El motivo no puede exceder 500 caracteres' }),
 });
 
 export type RechazarPagoDto = z.infer<typeof zRechazarPago>;
@@ -105,10 +105,10 @@ export const zPagoResponse = z.object({
   status: zEstadoPago,
   confirmedByParticipant: z.boolean(),
   confirmedByAdmin: z.boolean(),
-  rejectionReason: z.string().nullable().optional(),
   ocrVerified: z.boolean(),
   ocrDetectedAmount: z.number().nullable(),
   evidenceUrl: z.string().url().nullable(),
+  rejectionReason: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

@@ -40,6 +40,14 @@ export class NumeroAjenoError extends DomainError {
   }
 }
 
+export class UsuarioNoAutorizadoError extends DomainError {
+  constructor(
+    message = 'Solo el organizador de la tanda o un administrador global pueden realizar esta acción',
+  ) {
+    super(message);
+  }
+}
+
 export class PagoDuplicadoError extends DomainError {
   constructor(public readonly idNumber: number) {
     super(

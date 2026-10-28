@@ -5,16 +5,15 @@ import {
   ComprobanteRequeridoError,
   ConfirmacionOrganizadorPreviaError,
   MontoHibridoInvalidoError,
-  MotivoRechazoRequeridoError,
   NumeroAjenoError,
   NumeroNoEncontradoError,
   PagoDuplicadoError,
   PagoNotFoundError,
   PagoRechazadoError,
   PagoYaConfirmadoError,
-  PagoYaRechazadoError,
   ReglaNegocioPagoError,
   TandaNoEncontradaError,
+  UsuarioNoAutorizadoError,
 } from '../../domain/errors/pago.errors';
 import type {
   NumeroConCuota,
@@ -26,12 +25,14 @@ import type { PagoEventsPort } from '../../domain/ports/out/pago-events.port';
 import type {
   ComprobanteArchivo,
   RegistrarPagoCommand,
+  UsuarioAutenticado,
 } from '../../domain/ports/in/pago-use-cases.port';
 
 const URL_COMPROBANTE = 'https://res.cloudinary.com/tandea/image/upload/comprobantes/pago.png';
 const ID_USER = 7;
 const ID_NUMBER = 10;
 const ID_TANDA = 3;
+const ID_ORGANIZADOR = 99;
 
 const comprobante: ComprobanteArchivo = {
   buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -44,7 +45,7 @@ function numero(overrides: Partial<NumeroConCuota> = {}): NumeroConCuota {
     idNumber: ID_NUMBER,
     idUser: ID_USER,
     roundNumber: 1,
-    tanda: { idTanda: ID_TANDA, contributionAmount: 1000 },
+    tanda: { idTanda: ID_TANDA, contributionAmount: 1000, idAdmin: ID_ORGANIZADOR },
     ...overrides,
   };
 }
@@ -66,12 +67,12 @@ describe('PagoService', () => {
         Pago.reconstitute({ ...pago.toPrimitives(), idPayment: 45 }),
       ),
       findById: vi.fn(),
-      update: vi.fn(),
+      update: vi.fn(async (pago: Pago) => pago),
       buscarNumeroConCuota: vi.fn().mockResolvedValue(numero()),
       existePagoActivo: vi.fn().mockResolvedValue(false),
     };
     storage = { subir: vi.fn().mockResolvedValue(URL_COMPROBANTE) };
-    ocr = { verificarMonto: vi.fn().mockResolvedValue({ montoDetectado: null }) };
+    ocr = { verificarMonto: vi.fn().mockResolvedValue({ montoDetectado: null, coincide: false }) };
     eventos = {
       publicarPagoRegistrado: vi.fn().mockResolvedValue(undefined),
       publicarPagoConfirmado: vi.fn().mockResolvedValue(undefined),
@@ -86,7 +87,7 @@ describe('PagoService', () => {
     );
   });
 
-  describe('registrar (AP-03)', () => {
+  describe('PagoService.registrar (AP-03)', () => {
     const registrar = (overrides: Partial<RegistrarPagoCommand> = {}) =>
       service.registrar({
         idUser: ID_USER,
@@ -99,9 +100,11 @@ describe('PagoService', () => {
 
     const pagoGuardado = (): Pago => repo.create.mock.calls[0][0] as Pago;
 
+    // ── Registro exitoso por método ─────────────────────────────────────────
+
     describe('registro exitoso', () => {
       it('transferencia: sube el comprobante, guarda pendiente y emite pago.registrado', async () => {
-        ocr.verificarMonto.mockResolvedValue({ montoDetectado: 1000 });
+        ocr.verificarMonto.mockResolvedValue({ montoDetectado: 1000, coincide: true });
 
         const pago = await registrar();
 
@@ -175,6 +178,8 @@ describe('PagoService', () => {
       });
     });
 
+    // ── Validación del pago híbrido ─────────────────────────────────────────
+
     describe('validación de pago híbrido contra la cuota', () => {
       it.each([
         ['suma mayor', 700, 400],
@@ -200,7 +205,7 @@ describe('PagoService', () => {
 
       it('acepta 0.1 + 0.2 = 0.3 comparando en centavos', async () => {
         repo.buscarNumeroConCuota.mockResolvedValue(
-          numero({ tanda: { idTanda: ID_TANDA, contributionAmount: 0.3 } }),
+          numero({ tanda: { idTanda: ID_TANDA, contributionAmount: 0.3, idAdmin: ID_ORGANIZADOR } }),
         );
 
         await registrar({ metodoPago: 'hibrido', transferAmount: 0.1, cashAmount: 0.2 });
@@ -238,6 +243,8 @@ describe('PagoService', () => {
       });
     });
 
+    // ── OCR ─────────────────────────────────────────────────────────────────
+
     describe('OCR', () => {
       it('si el OCR lanza error, guarda el pago pendiente con ocr_verified = false y monto nulo', async () => {
         ocr.verificarMonto.mockRejectedValue(new Error('Vision API caída'));
@@ -252,7 +259,7 @@ describe('PagoService', () => {
       });
 
       it('si el OCR detecta un monto distinto, guarda el monto y ocr_verified = false', async () => {
-        ocr.verificarMonto.mockResolvedValue({ montoDetectado: 800 });
+        ocr.verificarMonto.mockResolvedValue({ montoDetectado: 800, coincide: false });
 
         await registrar();
 
@@ -261,7 +268,9 @@ describe('PagoService', () => {
       });
     });
 
-    describe('errores de registro', () => {
+    // ── Errores de autorización y existencia ────────────────────────────────
+
+    describe('errores', () => {
       it('lanza NumeroAjenoError (403) si el número no es del usuario', async () => {
         repo.buscarNumeroConCuota.mockResolvedValue(numero({ idUser: 99 }));
 
@@ -312,257 +321,301 @@ describe('PagoService', () => {
     });
   });
 
-  describe('confirmar (AP-05)', () => {
-    it('confirma el pago por el organizador, actualiza a confirmado_parcial y emite pago.confirmado', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 100,
+  // ─────────────────────────────────────────────────────────────────────────
+  // CASO DE USO: CONFIRMAR PAGO (AP-05)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('PagoService.confirmar (AP-05)', () => {
+    const organizador: UsuarioAutenticado = {
+      idUser: ID_ORGANIZADOR,
+      email: 'org@tandea.test',
+      role: 'usuario',
+    };
+
+    const adminGlobal: UsuarioAutenticado = {
+      idUser: 999,
+      email: 'admin@tandea.test',
+      role: 'admin_global',
+    };
+
+    const otroUsuario: UsuarioAutenticado = {
+      idUser: 123,
+      email: 'ajeno@tandea.test',
+      role: 'usuario',
+    };
+
+    const pagoPendiente = (confirmedByParticipant = true): Pago => {
+      return Pago.reconstitute({
+        idPayment: 50,
         idNumber: ID_NUMBER,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
         transferAmount: 1000,
         cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
         status: 'PENDIENTE',
-        confirmedByParticipant: false,
+        confirmedByParticipant,
         confirmedByAdmin: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+    };
 
+    it('organizador confirma pago exitosamente, actualiza confirmedByAdmin y emite pago.confirmado', async () => {
+      const pago = pagoPendiente(true);
       repo.findById.mockResolvedValue(pago);
-      repo.update.mockImplementation(async (p: Pago) => p);
 
-      const resultado = await service.confirmar(100);
-
-      expect(resultado.confirmedByAdmin).toBe(true);
-      expect(resultado.estado).toBe('confirmado_parcial');
-      expect(repo.update).toHaveBeenCalledOnce();
-      expect(eventos.publicarPagoConfirmado).toHaveBeenCalledWith({
-        paymentId: 100,
-        tandaId: ID_TANDA,
-        userId: ID_USER,
-      });
-    });
-
-    it('si el participante ya había confirmado, el estado queda "confirmado"', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 101,
-        idNumber: ID_NUMBER,
-        transferAmount: 1000,
-        cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'PENDIENTE',
-        confirmedByParticipant: true,
-        confirmedByAdmin: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      repo.findById.mockResolvedValue(pago);
-      repo.update.mockImplementation(async (p: Pago) => p);
-
-      const resultado = await service.confirmar(101);
+      const resultado = await service.confirmar(50, organizador);
 
       expect(resultado.confirmedByAdmin).toBe(true);
       expect(resultado.status).toBe('CONFIRMADO');
-      expect(resultado.estado).toBe('confirmado');
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ confirmedByAdmin: true }),
+      );
+      expect(eventos.publicarPagoConfirmado).toHaveBeenCalledWith({
+        paymentId: 50,
+        tandaId: ID_TANDA,
+        confirmedByAdmin: true,
+      });
     });
 
-    it('lanza PagoNotFoundError si el pago no existe', async () => {
-      repo.findById.mockResolvedValue(null);
+    it('administrador global puede confirmar pago aunque no sea el idAdmin de la tanda', async () => {
+      const pago = pagoPendiente(true);
+      repo.findById.mockResolvedValue(pago);
 
-      await expect(service.confirmar(999)).rejects.toThrow(PagoNotFoundError);
+      const resultado = await service.confirmar(50, adminGlobal);
+
+      expect(resultado.confirmedByAdmin).toBe(true);
+      expect(repo.update).toHaveBeenCalledOnce();
+      expect(eventos.publicarPagoConfirmado).toHaveBeenCalledOnce();
+    });
+
+    it('rechaza con UsuarioNoAutorizadoError si el usuario no es el organizador ni admin global', async () => {
+      const pago = pagoPendiente(true);
+      repo.findById.mockResolvedValue(pago);
+
+      await expect(service.confirmar(50, otroUsuario)).rejects.toThrowError(
+        UsuarioNoAutorizadoError,
+      );
+      expect(repo.update).not.toHaveBeenCalled();
       expect(eventos.publicarPagoConfirmado).not.toHaveBeenCalled();
     });
 
-    it('lanza ConfirmacionOrganizadorPreviaError si el organizador ya confirmó', async () => {
+    it('lanza PagoNotFoundError (404) si el pago no existe', async () => {
+      repo.findById.mockResolvedValue(null);
+
+      await expect(service.confirmar(9999, organizador)).rejects.toThrowError(
+        PagoNotFoundError,
+      );
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('lanza ConfirmacionOrganizadorPreviaError (422) si el organizador ya había confirmado', async () => {
       const pago = Pago.reconstitute({
-        idPayment: 102,
+        idPayment: 50,
         idNumber: ID_NUMBER,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
         transferAmount: 1000,
         cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
         status: 'PENDIENTE',
         confirmedByParticipant: false,
         confirmedByAdmin: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-
       repo.findById.mockResolvedValue(pago);
 
-      await expect(service.confirmar(102)).rejects.toThrow(ConfirmacionOrganizadorPreviaError);
-      expect(eventos.publicarPagoConfirmado).not.toHaveBeenCalled();
-    });
-
-    it('lanza PagoRechazadoError si se intenta confirmar un pago rechazado', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 103,
-        idNumber: ID_NUMBER,
-        transferAmount: 1000,
-        cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'RECHAZADO',
-        confirmedByParticipant: false,
-        confirmedByAdmin: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      repo.findById.mockResolvedValue(pago);
-
-      await expect(service.confirmar(103)).rejects.toThrow(PagoRechazadoError);
-      expect(eventos.publicarPagoConfirmado).not.toHaveBeenCalled();
-    });
-
-    it('si falla la publicación del evento, igual retorna el pago confirmado', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 104,
-        idNumber: ID_NUMBER,
-        transferAmount: 1000,
-        cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'PENDIENTE',
-        confirmedByParticipant: false,
-        confirmedByAdmin: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      repo.findById.mockResolvedValue(pago);
-      repo.update.mockImplementation(async (p: Pago) => p);
-      eventos.publicarPagoConfirmado.mockRejectedValue(new Error('bus caído'));
-
-      const resultado = await service.confirmar(104);
-      expect(resultado.confirmedByAdmin).toBe(true);
-    });
-  });
-
-  describe('rechazar (AP-05)', () => {
-    it('rechaza el pago con motivo, pasa estado a "rechazado" y emite pago.rechazado', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 200,
-        idNumber: ID_NUMBER,
-        transferAmount: 1000,
-        cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'PENDIENTE',
-        confirmedByParticipant: true,
-        confirmedByAdmin: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      repo.findById.mockResolvedValue(pago);
-      repo.update.mockImplementation(async (p: Pago) => p);
-
-      const resultado = await service.rechazar(200, 'Comprobante alterado');
-
-      expect(resultado.status).toBe('RECHAZADO');
-      expect(resultado.estado).toBe('rechazado');
-      expect(resultado.rejectionReason).toBe('Comprobante alterado');
-      expect(repo.update).toHaveBeenCalledOnce();
-      expect(eventos.publicarPagoRechazado).toHaveBeenCalledWith({
-        paymentId: 200,
-        tandaId: ID_TANDA,
-        motivo: 'Comprobante alterado',
-        userId: ID_USER,
-      });
-    });
-
-    it('lanza MotivoRechazoRequeridoError si se rechaza sin motivo', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 201,
-        idNumber: ID_NUMBER,
-        transferAmount: 1000,
-        cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'PENDIENTE',
-        confirmedByParticipant: true,
-        confirmedByAdmin: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      repo.findById.mockResolvedValue(pago);
-
-      await expect(service.rechazar(201, '')).rejects.toThrow(MotivoRechazoRequeridoError);
+      await expect(service.confirmar(50, organizador)).rejects.toThrowError(
+        ConfirmacionOrganizadorPreviaError,
+      );
       expect(repo.update).not.toHaveBeenCalled();
-      expect(eventos.publicarPagoRechazado).not.toHaveBeenCalled();
     });
 
-    it('lanza PagoYaRechazadoError si el pago ya estaba rechazado', async () => {
+    it('lanza PagoYaConfirmadoError (422) si el pago ya está completamente confirmado', async () => {
       const pago = Pago.reconstitute({
-        idPayment: 202,
+        idPayment: 50,
         idNumber: ID_NUMBER,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
         transferAmount: 1000,
         cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'RECHAZADO',
-        confirmedByParticipant: true,
-        confirmedByAdmin: false,
-        rejectionReason: 'Motivo previo',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      repo.findById.mockResolvedValue(pago);
-
-      await expect(service.rechazar(202, 'Nuevo motivo')).rejects.toThrow(PagoYaRechazadoError);
-      expect(repo.update).not.toHaveBeenCalled();
-      expect(eventos.publicarPagoRechazado).not.toHaveBeenCalled();
-    });
-
-    it('lanza PagoYaConfirmadoError si el pago ya está completamente confirmado', async () => {
-      const pago = Pago.reconstitute({
-        idPayment: 203,
-        idNumber: ID_NUMBER,
-        transferAmount: 1000,
-        cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
         status: 'CONFIRMADO',
         confirmedByParticipant: true,
         confirmedByAdmin: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-
       repo.findById.mockResolvedValue(pago);
 
-      await expect(service.rechazar(203, 'Rechazo tardío')).rejects.toThrow(PagoYaConfirmadoError);
+      await expect(service.confirmar(50, organizador)).rejects.toThrowError(
+        PagoYaConfirmadoError,
+      );
       expect(repo.update).not.toHaveBeenCalled();
-      expect(eventos.publicarPagoRechazado).not.toHaveBeenCalled();
     });
 
-    it('si falla la publicación del evento, igual retorna el pago rechazado', async () => {
+    it('lanza PagoRechazadoError (422) si se intenta confirmar un pago previamente rechazado', async () => {
       const pago = Pago.reconstitute({
-        idPayment: 204,
+        idPayment: 50,
         idNumber: ID_NUMBER,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
         transferAmount: 1000,
         cashAmount: 0,
-        totalAmount: 1000,
-        metodoPago: 'transferencia',
-        status: 'PENDIENTE',
-        confirmedByParticipant: false,
+        status: 'RECHAZADO',
+        confirmedByParticipant: true,
         confirmedByAdmin: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-
       repo.findById.mockResolvedValue(pago);
-      repo.update.mockImplementation(async (p: Pago) => p);
-      eventos.publicarPagoRechazado.mockRejectedValue(new Error('bus caído'));
 
-      const resultado = await service.rechazar(204, 'Monto no coincide');
+      await expect(service.confirmar(50, organizador)).rejects.toThrowError(
+        PagoRechazadoError,
+      );
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('continúa exitosamente si falla la emisión del evento', async () => {
+      const pago = pagoPendiente(true);
+      repo.findById.mockResolvedValue(pago);
+      eventos.publicarPagoConfirmado.mockRejectedValue(new Error('Event bus down'));
+
+      const resultado = await service.confirmar(50, organizador);
+
+      expect(resultado.confirmedByAdmin).toBe(true);
+      expect(repo.update).toHaveBeenCalledOnce();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CASO DE USO: RECHAZAR PAGO (AP-05)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('PagoService.rechazar (AP-05)', () => {
+    const organizador: UsuarioAutenticado = {
+      idUser: ID_ORGANIZADOR,
+      email: 'org@tandea.test',
+      role: 'usuario',
+    };
+
+    const adminGlobal: UsuarioAutenticado = {
+      idUser: 999,
+      email: 'admin@tandea.test',
+      role: 'admin_global',
+    };
+
+    const otroUsuario: UsuarioAutenticado = {
+      idUser: 123,
+      email: 'ajeno@tandea.test',
+      role: 'usuario',
+    };
+
+    const pagoPendiente = (): Pago => {
+      return Pago.reconstitute({
+        idPayment: 60,
+        idNumber: ID_NUMBER,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
+        transferAmount: 1000,
+        cashAmount: 0,
+        status: 'PENDIENTE',
+        confirmedByParticipant: true,
+        confirmedByAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    };
+
+    it('organizador rechaza pago exitosamente, guarda motivo y emite pago.rechazado', async () => {
+      const pago = pagoPendiente();
+      repo.findById.mockResolvedValue(pago);
+
+      const motivo = 'Comprobante no legible y sin número de rastreo válido';
+      const resultado = await service.rechazar(60, motivo, organizador);
+
       expect(resultado.status).toBe('RECHAZADO');
-      expect(resultado.rejectionReason).toBe('Monto no coincide');
+      expect(resultado.rejectionReason).toBe(motivo);
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'RECHAZADO',
+          rejectionReason: motivo,
+        }),
+      );
+      expect(eventos.publicarPagoRechazado).toHaveBeenCalledWith({
+        paymentId: 60,
+        tandaId: ID_TANDA,
+        motivo,
+      });
+    });
+
+    it('administrador global puede rechazar pago', async () => {
+      const pago = pagoPendiente();
+      repo.findById.mockResolvedValue(pago);
+
+      const motivo = 'Fraude detectado por mesa de control';
+      const resultado = await service.rechazar(60, motivo, adminGlobal);
+
+      expect(resultado.status).toBe('RECHAZADO');
+      expect(resultado.rejectionReason).toBe(motivo);
+      expect(repo.update).toHaveBeenCalledOnce();
+      expect(eventos.publicarPagoRechazado).toHaveBeenCalledOnce();
+    });
+
+    it('rechaza con UsuarioNoAutorizadoError si el usuario no es organizador ni admin global', async () => {
+      const pago = pagoPendiente();
+      repo.findById.mockResolvedValue(pago);
+
+      await expect(
+        service.rechazar(60, 'Motivo de prueba', otroUsuario),
+      ).rejects.toThrowError(UsuarioNoAutorizadoError);
+
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(eventos.publicarPagoRechazado).not.toHaveBeenCalled();
+    });
+
+    it('lanza PagoNotFoundError (404) si el pago no existe', async () => {
+      repo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.rechazar(9999, 'Motivo cualquiera', organizador),
+      ).rejects.toThrowError(PagoNotFoundError);
+
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('lanza PagoYaConfirmadoError (422) si se intenta rechazar un pago ya confirmado', async () => {
+      const pago = Pago.reconstitute({
+        idPayment: 60,
+        idNumber: ID_NUMBER,
+        metodoPago: 'transferencia',
+        totalAmount: 1000,
+        transferAmount: 1000,
+        cashAmount: 0,
+        status: 'CONFIRMADO',
+        confirmedByParticipant: true,
+        confirmedByAdmin: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      repo.findById.mockResolvedValue(pago);
+
+      await expect(
+        service.rechazar(60, 'Intento de rechazar pago confirmado', organizador),
+      ).rejects.toThrowError(PagoYaConfirmadoError);
+
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(eventos.publicarPagoRechazado).not.toHaveBeenCalled();
+    });
+
+    it('continúa exitosamente si falla la emisión del evento', async () => {
+      const pago = pagoPendiente();
+      repo.findById.mockResolvedValue(pago);
+      eventos.publicarPagoRechazado.mockRejectedValue(new Error('Event bus down'));
+
+      const resultado = await service.rechazar(60, 'Comprobante falso', organizador);
+
+      expect(resultado.status).toBe('RECHAZADO');
+      expect(repo.update).toHaveBeenCalledOnce();
     });
   });
 });

@@ -23,8 +23,8 @@ import { PAGO_EVENTS_PORT } from './domain/ports/out/pago-events.port';
 import { CloudinaryAdapter } from './infrastructure/adapters/out/storage/cloudinary.adapter';
 import { DrizzleEvidenceRepository } from './infrastructure/adapters/out/database/drizzle-evidence.repository';
 
-// OCR & Eventos (adaptadores temporales)
-import { OcrMockAdapter } from './infrastructure/adapters/out/ocr/ocr-mock.adapter';
+// OCR & Eventos Adapters
+import { OcrGoogleVisionAdapter } from './infrastructure/adapters/out/ocr/ocr-google-vision.adapter';
 import { LogPagoEventsAdapter } from './infrastructure/adapters/out/events/log-pago-events.adapter';
 
 /**
@@ -35,8 +35,8 @@ import { LogPagoEventsAdapter } from './infrastructure/adapters/out/events/log-p
  *  - Puerto de Salida: PAGO_REPOSITORY_PORT ➔ Adaptador: DrizzlePagoRepository
  *  - Puerto de Salida: STORAGE_PORT ➔ Adaptador: CloudinaryAdapter
  *  - Puerto de Salida: EVIDENCE_REPOSITORY_PORT ➔ Adaptador: DrizzleEvidenceRepository
- *  - Puerto de Salida: OCR_SERVICE_PORT ➔ Adaptador: OcrMockAdapter (temporal, AP-04)
- *  - Puerto de Salida: PAGO_EVENTS_PORT ➔ Adaptador: LogPagoEventsAdapter (temporal, BE-NOTIF)
+ *  - Puerto de Salida: OCR_SERVICE_PORT ➔ Adaptador: OcrGoogleVisionAdapter (AP-04)
+ *  - Puerto de Salida: PAGO_EVENTS_PORT ➔ Adaptador: LogPagoEventsAdapter (BE-NOTIF)
  *  - Puerto de Entrada: PAGO_SERVICE_PORT ➔ Servicio de Aplicación: PagoService
  */
 @Module({
@@ -58,12 +58,12 @@ import { LogPagoEventsAdapter } from './infrastructure/adapters/out/events/log-p
       provide: EVIDENCE_REPOSITORY_PORT,
       useClass: DrizzleEvidenceRepository,
     },
-    // TODO([INT-PAGO] Implementar OcrServicePort y OcrGoogleVisionAdapter (AP-04)): usar OcrGoogleVisionAdapter
+    // Vinculación del Puerto de OCR con Google Vision
     {
       provide: OCR_SERVICE_PORT,
-      useClass: OcrMockAdapter,
+      useClass: OcrGoogleVisionAdapter,
     },
-    // TODO([BE-NOTIF] Emitir y escuchar eventos internos): usar el adaptador del bus de eventos
+    // Vinculación del Puerto de Eventos
     {
       provide: PAGO_EVENTS_PORT,
       useClass: LogPagoEventsAdapter,
@@ -76,13 +76,14 @@ import { LogPagoEventsAdapter } from './infrastructure/adapters/out/events/log-p
     PagoService,
     CloudinaryAdapter,
     DrizzleEvidenceRepository,
+    OcrGoogleVisionAdapter,
   ],
   exports: [
     PAGO_SERVICE_PORT,
     PagoService,
     STORAGE_PORT,
     EVIDENCE_REPOSITORY_PORT,
+    OCR_SERVICE_PORT,
   ],
 })
 export class PagoModule {}
-

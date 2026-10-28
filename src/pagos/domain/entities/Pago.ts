@@ -2,11 +2,11 @@ import {
   ConfirmacionAdminPreviaError,
   ConfirmacionOrganizadorPreviaError,
   ConfirmacionParticipantePreviaError,
-  MotivoRechazoRequeridoError,
   OrganizadorDebeConfirmarPrimeroError,
   PagoRechazadoError,
-  PagoYaConfirmadoError,
   PagoYaRechazadoError,
+  PagoYaConfirmadoError,
+  MotivoRechazoRequeridoError,
 } from '../errors/pago.errors';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'hibrido';
@@ -30,10 +30,10 @@ export interface PagoProps {
   status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO';
   confirmedByParticipant: boolean;
   confirmedByAdmin: boolean;
-  rejectionReason?: string | null;
   evidenceUrl?: string | null;
   ocrDetectedAmount?: number | null;
   ocrVerified?: boolean;
+  rejectionReason?: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -57,10 +57,10 @@ export type CreatePagoProps = {
   status?: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO';
   confirmedByParticipant?: boolean;
   confirmedByAdmin?: boolean;
-  rejectionReason?: string | null;
   evidenceUrl?: string | null;
   ocrDetectedAmount?: number | null;
   ocrVerified?: boolean;
+  rejectionReason?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 
@@ -96,10 +96,10 @@ export class Pago {
       status: (props.status?.toUpperCase() as 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO') ?? 'PENDIENTE',
       confirmedByParticipant: Boolean(props.confirmedByParticipant),
       confirmedByAdmin: Boolean(props.confirmedByAdmin),
-      rejectionReason: props.rejectionReason ?? null,
       evidenceUrl: props.evidenceUrl ?? null,
       ocrDetectedAmount: props.ocrDetectedAmount ?? null,
       ocrVerified: Boolean(props.ocrVerified),
+      rejectionReason: props.rejectionReason ?? null,
     });
   }
 
@@ -117,9 +117,8 @@ export class Pago {
     const evidenceUrl = props.evidenceUrl ?? props.comprobanteUrl ?? null;
     const confirmedByParticipant = props.confirmedByParticipant ?? false;
     const confirmedByAdmin = props.confirmedByAdmin ?? false;
-    const rejectionReason = props.rejectionReason ?? null;
 
-    const status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
+    let status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
       props.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
 
     return new Pago({
@@ -133,10 +132,10 @@ export class Pago {
       status,
       confirmedByParticipant,
       confirmedByAdmin,
-      rejectionReason,
       evidenceUrl,
       ocrDetectedAmount: props.ocrDetectedAmount ?? null,
       ocrVerified: props.ocrVerified ?? false,
+      rejectionReason: props.rejectionReason ?? null,
       createdAt: props.createdAt ?? now,
       updatedAt: props.updatedAt ?? now,
       tandaId: props.tandaId,
@@ -190,10 +189,6 @@ export class Pago {
     return this.props.confirmedByAdmin;
   }
 
-  get rejectionReason(): string | null {
-    return this.props.rejectionReason ?? null;
-  }
-
   get evidenceUrl(): string | null {
     return this.props.evidenceUrl ?? null;
   }
@@ -204,6 +199,10 @@ export class Pago {
 
   get ocrVerified(): boolean {
     return this.props.ocrVerified ?? false;
+  }
+
+  get rejectionReason(): string | null {
+    return this.props.rejectionReason ?? null;
   }
 
   get createdAt(): Date {
@@ -228,10 +227,16 @@ export class Pago {
     return this.props.transferAmount;
   }
 
-  get estado(): EstadoPago {
-    if (this.props.status === 'RECHAZADO') return 'rechazado';
-    if (this.estaConfirmado()) return 'confirmado';
-    if (this.props.confirmedByAdmin) return 'confirmado_parcial';
+  get estado(): string {
+    if (this.props.status === 'CONFIRMADO') {
+      return 'confirmado';
+    }
+    if (this.props.status === 'RECHAZADO') {
+      return 'rechazado';
+    }
+    if (this.props.confirmedByAdmin) {
+      return 'confirmado_parcial';
+    }
     return 'pendiente';
   }
 
@@ -330,7 +335,7 @@ export class Pago {
   }
 
   /**
-   * Confirma el pago por parte del organizador (AP-05).
+   * Alias de compatibilidad para confirmarPorAdmin ejecutado por el organizador.
    */
   public confirmarPorOrganizador(): void {
     if (this.props.status === 'RECHAZADO') {
@@ -367,8 +372,8 @@ export class Pago {
   }
 
   /**
-   * Rechaza el pago por fondos no recibidos, comprobante inválido o discrepancias (AP-05).
-   * Requiere obligatoriamente un motivo de rechazo.
+   * Rechaza el pago por fondos no recibidos o comprobante inválido.
+   * Guarda el motivo del rechazo si se proporciona.
    */
   public rechazar(motivo: string): void {
     if (this.estaConfirmado()) {
@@ -377,12 +382,13 @@ export class Pago {
     if (this.props.status === 'RECHAZADO') {
       throw new PagoYaRechazadoError();
     }
-    if (!motivo || !motivo.trim()) {
+    const motivoNormalizado = motivo.trim();
+    if (!motivoNormalizado) {
       throw new MotivoRechazoRequeridoError();
     }
 
     this.props.status = 'RECHAZADO';
-    this.props.rejectionReason = motivo.trim();
+    this.props.rejectionReason = motivoNormalizado;
     this.props.updatedAt = new Date();
   }
 

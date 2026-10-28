@@ -100,20 +100,21 @@ export class PagoController {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // PATCH /pagos/:id/confirmar — Confirmación de pago por el organizador (AP-05)
+  // PATCH /pagos/:id/confirmar — Confirmación del Organizador (AP-05)
   // ─────────────────────────────────────────────────────────────────────────
 
   @Patch(':id/confirmar')
   @UseGuards(TandaMemberGuard)
   async confirmar(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PagoResponseDto> {
-    const pago = await this.pagoService.confirmar(id);
+    const pago = await this.pagoService.confirmar(id, user);
     return zPagoResponse.parse(toResponseDto(pago));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // PATCH /pagos/:id/rechazar — Rechazo de pago por el organizador (AP-05)
+  // PATCH /pagos/:id/rechazar — Rechazo del Organizador (AP-05)
   // ─────────────────────────────────────────────────────────────────────────
 
   @Patch(':id/rechazar')
@@ -121,22 +122,25 @@ export class PagoController {
   async rechazar(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PagoResponseDto> {
     const dto = zRechazarPago.parse(body ?? {});
-    const pago = await this.pagoService.rechazar(id, dto.motivo);
+    const pago = await this.pagoService.rechazar(id, dto.motivo, user);
     return zPagoResponse.parse(toResponseDto(pago));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Alias de compatibilidad: PATCH /pagos/:id/confirmar-organizador
+  // PATCH /pagos/:id/confirmar-organizador (Alias retrocompatible)
   // ─────────────────────────────────────────────────────────────────────────
 
   @Patch(':id/confirmar-organizador')
   @UseGuards(TandaMemberGuard)
   async confirmarOrganizador(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PagoResponseDto> {
-    return this.confirmar(id);
+    const pago = await this.pagoService.confirmarOrganizador(id, user);
+    return zPagoResponse.parse(toResponseDto(pago));
   }
 
   // ─────────────────────────────────────────────────────────────────────────

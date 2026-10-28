@@ -7,6 +7,7 @@ import {
   PagoDuplicadoError,
   PagoNotFoundError,
   TandaNoEncontradaError,
+  UsuarioNoAutorizadoError,
 } from '../../domain/errors/pago.errors';
 import {
   PAGO_REPOSITORY_PORT,
@@ -27,6 +28,7 @@ import {
 import {
   type PagoUseCasesPort,
   type RegistrarPagoCommand,
+  type UsuarioAutenticado,
 } from '../../domain/ports/in/pago-use-cases.port';
 
 /**
@@ -173,80 +175,77 @@ export class PagoService implements PagoUseCasesPort {
   // CASO DE USO: CONFIRMAR PAGO POR EL ORGANIZADOR (AP-05)
   // ─────────────────────────────────────────────────────────────────────────
 
-  async confirmar(id: number): Promise<Pago> {
+  async confirmar(id: number, usuario: UsuarioAutenticado): Promise<Pago> {
     const pago = await this.obtenerPago(id);
+    const tandaId = await this.verificarPermisosOrganizador(pago.idNumber, usuario);
 
-    // Ejecuta las reglas de negocio en la entidad de dominio
+    // Invoca el método de dominio (valida que no esté previamente confirmado ni rechazado)
     pago.confirmarPorOrganizador();
 
-    // Persiste el estado actualizado
+    // Persiste el cambio a través del repositorio
     const pagoActualizado = await this.pagoRepository.update(pago);
 
-    // Emite el evento de dominio pago.confirmado
-    const numero = await this.pagoRepository.buscarNumeroConCuota(pago.idNumber);
-    const tandaId = numero?.tanda?.idTanda ?? 0;
-    const userId = numero?.idUser;
-    await this.publicarPagoConfirmado(pagoActualizado.idPayment!, tandaId, userId);
+    // Emite el evento de dominio tras la persistencia exitosa
+    await this.publicarPagoConfirmado(
+      pagoActualizado.idPayment!,
+      tandaId,
+      pagoActualizado.confirmedByAdmin,
+    );
 
     return pagoActualizado;
-  }
-
-  /**
-   * Alias de compatibilidad hacia confirmar(id).
-   */
-  async confirmarOrganizador(id: number): Promise<Pago> {
-    return this.confirmar(id);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // CASO DE USO: RECHAZAR PAGO POR EL ORGANIZADOR (AP-05)
   // ─────────────────────────────────────────────────────────────────────────
 
-  async rechazar(id: number, motivo: string): Promise<Pago> {
+  async rechazar(
+    id: number,
+    motivo: string,
+    usuario: UsuarioAutenticado,
+  ): Promise<Pago> {
     const pago = await this.obtenerPago(id);
+    const tandaId = await this.verificarPermisosOrganizador(pago.idNumber, usuario);
 
-    // Ejecuta las reglas de negocio en la entidad de dominio
+    // Invoca el método de rechazo de la entidad (impide rechazar pagos confirmados)
     pago.rechazar(motivo);
 
-    // Persiste el estado actualizado
+    // Persiste el estado actualizado y motivo en la base de datos
     const pagoActualizado = await this.pagoRepository.update(pago);
 
-    // Emite el evento de dominio pago.rechazado
-    const numero = await this.pagoRepository.buscarNumeroConCuota(pago.idNumber);
-    const tandaId = numero?.tanda?.idTanda ?? 0;
-    const userId = numero?.idUser;
-    await this.publicarPagoRechazado(pagoActualizado.idPayment!, tandaId, motivo, userId);
+    // Emite el evento de dominio tras persistencia exitosa
+    await this.publicarPagoRechazado(
+      pagoActualizado.idPayment!,
+      tandaId,
+      motivo,
+    );
 
     return pagoActualizado;
   }
 
-  private async publicarPagoConfirmado(
-    paymentId: number,
-    tandaId: number,
-    userId?: number | null,
-  ): Promise<void> {
-    try {
-      await this.eventos.publicarPagoConfirmado({ paymentId, tandaId, userId });
-    } catch (error: unknown) {
-      this.logger.error(
-        `No se pudo publicar pago.confirmado del pago ${paymentId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // CASO DE USO: CONFIRMAR ORGANIZADOR (Alias de compatibilidad)
+  // ─────────────────────────────────────────────────────────────────────────
 
-  private async publicarPagoRechazado(
-    paymentId: number,
-    tandaId: number,
-    motivo: string,
-    userId?: number | null,
-  ): Promise<void> {
-    try {
-      await this.eventos.publicarPagoRechazado({ paymentId, tandaId, motivo, userId });
-    } catch (error: unknown) {
-      this.logger.error(
-        `No se pudo publicar pago.rechazado del pago ${paymentId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+  async confirmarOrganizador(
+    id: number,
+    usuario?: UsuarioAutenticado,
+  ): Promise<Pago> {
+    if (usuario) {
+      return this.confirmar(id, usuario);
     }
+
+    const pago = await this.obtenerPago(id);
+    pago.confirmarPorOrganizador();
+    const actualizado = await this.pagoRepository.update(pago);
+
+    await this.publicarPagoConfirmado(
+      actualizado.idPayment!,
+      0,
+      actualizado.confirmedByAdmin,
+    );
+
+    return actualizado;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -279,5 +278,71 @@ export class PagoService implements PagoUseCasesPort {
     pago.registrarResultadoOcr(montoDetectado);
 
     return this.pagoRepository.update(pago);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HELPERS PRIVADOS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Verifica que el usuario sea el organizador (idAdmin) de la tanda asociada al turno o admin global.
+   */
+  private async verificarPermisosOrganizador(
+    idNumber: number,
+    usuario: UsuarioAutenticado,
+  ): Promise<number> {
+    const numero = await this.pagoRepository.buscarNumeroConCuota(idNumber);
+    if (!numero) {
+      throw new NumeroNoEncontradoError(idNumber);
+    }
+    if (!numero.tanda) {
+      throw new TandaNoEncontradaError(idNumber);
+    }
+
+    const esAdminGlobal = usuario.role === 'admin_global';
+    const esOrganizador =
+      numero.tanda.idAdmin !== undefined && numero.tanda.idAdmin === usuario.idUser;
+
+    if (!esAdminGlobal && !esOrganizador) {
+      throw new UsuarioNoAutorizadoError();
+    }
+
+    return numero.tanda.idTanda;
+  }
+
+  private async publicarPagoConfirmado(
+    paymentId: number,
+    tandaId: number,
+    confirmedByAdmin: boolean,
+  ): Promise<void> {
+    try {
+      await this.eventos.publicarPagoConfirmado({
+        paymentId,
+        tandaId,
+        confirmedByAdmin,
+      });
+    } catch (error: unknown) {
+      this.logger.error(
+        `No se pudo publicar pago.confirmado del pago ${paymentId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async publicarPagoRechazado(
+    paymentId: number,
+    tandaId: number,
+    motivo: string,
+  ): Promise<void> {
+    try {
+      await this.eventos.publicarPagoRechazado({
+        paymentId,
+        tandaId,
+        motivo,
+      });
+    } catch (error: unknown) {
+      this.logger.error(
+        `No se pudo publicar pago.rechazado del pago ${paymentId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Nombres de los eventos internos emitidos en el ciclo de vida de un pago.
+ * Nombres de eventos internos emitidos por el módulo de Pagos.
  */
 export const PAGO_REGISTRADO = 'pago.registrado';
 export const PAGO_CONFIRMADO = 'pago.confirmado';
@@ -13,15 +13,14 @@ export interface PagoRegistradoEvent {
 
 export interface PagoConfirmadoEvent {
   paymentId: number;
-  tandaId: number;
-  userId?: number | null;
+  tandaId?: number;
+  confirmedByAdmin: boolean;
 }
 
 export interface PagoRechazadoEvent {
   paymentId: number;
-  tandaId: number;
+  tandaId?: number;
   motivo: string;
-  userId?: number | null;
 }
 
 /**

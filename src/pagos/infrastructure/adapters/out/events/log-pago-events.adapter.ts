@@ -10,9 +10,7 @@ import {
 } from '../../../../domain/ports/out/pago-events.port';
 
 /**
- * Adaptador de eventos basado en Logger.
- *
- * Publica eventos del ciclo de vida de pagos sin acoplar el dominio a infraestructura concreta.
+ * Adaptador temporal de eventos: registra los eventos de dominio en el log.
  */
 @Injectable()
 export class LogPagoEventsAdapter implements PagoEventsPort {

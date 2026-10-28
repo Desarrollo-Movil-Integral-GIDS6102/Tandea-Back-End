@@ -73,6 +73,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         roundNumber: numberTable.roundNumber,
         idTanda: tandaTable.idTanda,
         contributionAmount: tandaTable.contributionAmount,
+        idAdmin: tandaTable.idAdmin,
       })
       .from(numberTable)
       .leftJoin(
@@ -98,6 +99,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
           ? {
               idTanda: row.idTanda,
               contributionAmount: parseFloat(row.contributionAmount),
+              idAdmin: row.idAdmin ?? undefined,
             }
           : null,
     };
@@ -137,7 +139,7 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         confirmedByAdmin: data.confirmedByAdmin,
         rejectionReason: data.rejectionReason,
         ocrDetectedAmount: data.ocrDetectedAmount,
-        ocrVerified: data.ocrVerified,
+        ocrVerified: data.ocrVerified
       })
       .where(eq(paymentTable.idPayment, data.idPayment!))
       .returning();

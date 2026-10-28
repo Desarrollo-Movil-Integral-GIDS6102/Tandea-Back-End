@@ -1,5 +1,5 @@
 {
-  "id": "dcd07cc2-f600-4652-934b-dc543254a399",
+  "id": "2b0ffe2d-6340-466e-b927-72339b09fd2c",
   "prevId": "d4237630-0d7a-4928-a497-c1fa9b6cf558",
   "version": "7",
   "dialect": "postgresql",
@@ -816,6 +816,12 @@
           "notNull": true,
           "default": "'PENDIENTE'"
         },
+        "rejection_reason": {
+          "name": "rejection_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -969,27 +975,6 @@
           "columns": [
             {
               "expression": "id_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "payout_id_number_status_idx": {
-          "name": "payout_id_number_status_idx",
-          "columns": [
-            {
-              "expression": "id_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

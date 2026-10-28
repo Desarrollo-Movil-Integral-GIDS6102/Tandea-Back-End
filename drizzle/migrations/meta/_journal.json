@@ -19,15 +19,8 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1793123388651,
-      "tag": "0002_dashing_spirit",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1793123831250,
-      "tag": "0003_curly_skrulls",
+      "when": 1793133641619,
+      "tag": "0002_small_sumo",
       "breakpoints": true
     }
   ]

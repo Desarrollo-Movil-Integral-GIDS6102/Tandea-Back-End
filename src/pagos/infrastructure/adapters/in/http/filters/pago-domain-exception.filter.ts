@@ -12,6 +12,7 @@ import {
   NumeroNoEncontradoError,
   TandaNoEncontradaError,
   NumeroAjenoError,
+  UsuarioNoAutorizadoError,
   PagoDuplicadoError,
 } from '../../../../../domain/errors/pago.errors';
 
@@ -39,7 +40,10 @@ export class PagoDomainExceptionFilter implements ExceptionFilter {
     ) {
       status = HttpStatus.NOT_FOUND;
       error = 'Not Found';
-    } else if (exception instanceof NumeroAjenoError) {
+    } else if (
+      exception instanceof NumeroAjenoError ||
+      exception instanceof UsuarioNoAutorizadoError
+    ) {
       status = HttpStatus.FORBIDDEN;
       error = 'Forbidden';
     } else if (exception instanceof PagoDuplicadoError) {
