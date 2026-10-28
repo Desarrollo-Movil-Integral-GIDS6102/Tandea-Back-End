@@ -66,8 +66,7 @@ export function toPersistence(pago: Pago): NewPaymentRow {
     confirmedByParticipant: p.confirmedByParticipant,
     confirmedByAdmin: p.confirmedByAdmin,
     rejectionReason: p.rejectionReason ?? null,
-    status: p.status,
-    rejectionReason: p.rejectionReason ?? null,
+    status: p.status
   };
 }
 
