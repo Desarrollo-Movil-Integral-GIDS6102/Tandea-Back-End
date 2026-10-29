@@ -373,18 +373,53 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       ).rejects.toThrow('El número #4 ya fue tomado por otro participante. Elige otro.');
     });
 
-    it('debe asignar automáticamente los primeros números libres según la cantidad', async () => {
+    it('por sorteo asigna al azar la cantidad pedida entre los libres, nunca el #0', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2, hasDeadNumber: true });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([0, 1, 3]);
+
+      const res = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, cantidad: 2 });
+
+      expect(res.numerosAsignados).toHaveLength(2);
+      expect(res.numerosAsignados.every((n) => [2, 4, 5].includes(n))).toBe(true);
+      expect(mockNumberRepo.createNumbers).toHaveBeenCalledOnce();
+    });
+
+    it('por sorteo con consecutivos entrega el bloque libre', async () => {
       const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 3]);
+      // Libres: 3, 4, 5 → único bloque de 3
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2]);
 
       const res = await service.unirseTanda({
         inviteCode: 'TND-TEST01',
         idUser: 30,
-        cantidad: 2,
+        cantidad: 3,
+        consecutivos: true,
       });
 
-      expect(res.numerosAsignados).toEqual([2, 4]);
+      expect(res.numerosAsignados).toEqual([3, 4, 5]);
+      expect(res.consecutivos).toBe(true);
+    });
+
+    it('por sorteo rechaza sin asignar nada si no alcanzan los libres', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3]);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, cantidad: 3 }),
+      ).rejects.toThrow('Solo quedan 2 números disponibles en la tanda');
+      expect(mockNumberRepo.createNumbers).not.toHaveBeenCalled();
+    });
+
+    it('por sorteo no deja elegir números', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [2] }),
+      ).rejects.toThrow('En una tanda por sorteo los números se asignan al azar');
     });
 
     it('el número muerto no ocupa lugar: una tanda de 3 admite 3 números de personas', async () => {

@@ -79,6 +79,7 @@ export class TandaController {
       selectedNumbers:
         dto.selectedNumbers ?? (dto.selectedNumber ? [dto.selectedNumber] : undefined),
       cantidad: dto.cantidad,
+      consecutivos: dto.consecutivos,
     });
 
     return {
@@ -88,6 +89,7 @@ export class TandaController {
         tanda: result.tanda.toPrimitives(),
         numeroAsignado: result.numeroAsignado,
         numerosAsignados: result.numerosAsignados,
+        consecutivos: result.consecutivos,
         isDeadNumber: result.isDeadNumber,
       },
     };

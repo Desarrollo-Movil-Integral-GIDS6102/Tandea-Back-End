@@ -19,6 +19,7 @@ import {
 } from '../../domain/ports/in/tanda-use-cases.port';
 import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
 import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
+import { sortearNumeros } from '../../domain/services/sortear-numeros';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
 import { Tanda, TandaStatus } from '../../domain/entities/tanda.entity';
@@ -301,13 +302,29 @@ export class TandaService implements TandaUseCasesPort {
     }
 
     // Un usuario (incluido el organizador) puede apartar uno o varios números
-    // En Tradicional el participante elige; nunca se reasigna otro número
-    if (!tanda.esSorteo && !command.selectedNumbers?.length) {
-      throw new BadRequestException('Elige al menos un número');
-    }
-
     let pedidos: number[];
-    if (command.selectedNumbers?.length) {
+    let consecutivos: boolean | undefined;
+    if (tanda.esSorteo) {
+      // Por sorteo el sistema asigna al azar entre los libres; el participante solo dice cuántos
+      if (command.selectedNumbers?.length) {
+        throw new BadRequestException('En una tanda por sorteo los números se asignan al azar');
+      }
+      const cantidad = command.cantidad ?? 1;
+      if (cantidad > libres.length) {
+        throw new BadRequestException(
+          `Solo quedan ${libres.length} números disponibles en la tanda`,
+        );
+      }
+      ({ numeros: pedidos, consecutivos } = sortearNumeros(
+        libres,
+        cantidad,
+        command.consecutivos ?? false,
+      ));
+    } else {
+      // En Tradicional el participante elige; nunca se reasigna otro número
+      if (!command.selectedNumbers?.length) {
+        throw new BadRequestException('Elige al menos un número');
+      }
       pedidos = [...new Set(command.selectedNumbers)];
       for (const n of pedidos) {
         if (n < 1 || n > tanda.numParticipants) {
@@ -319,14 +336,6 @@ export class TandaService implements TandaUseCasesPort {
           throw new ConflictException(numeroTomadoMensaje(n));
         }
       }
-    } else {
-      const cantidad = command.cantidad ?? 1;
-      if (cantidad > libres.length) {
-        throw new BadRequestException(
-          `Solo quedan ${libres.length} números disponibles en la tanda`,
-        );
-      }
-      pedidos = libres.slice(0, cantidad);
     }
 
     try {
@@ -343,7 +352,11 @@ export class TandaService implements TandaUseCasesPort {
     } catch (error) {
       if (error instanceof NumeroYaTomadoError) {
         // El insert es una sola sentencia: no se apartó ninguno de los números pedidos
-        throw new ConflictException(numeroTomadoMensaje(error.numero));
+        throw new ConflictException(
+          tanda.esSorteo
+            ? 'Otro participante tomó números al mismo tiempo. Intenta de nuevo.'
+            : numeroTomadoMensaje(error.numero),
+        );
       }
       throw error;
     }
@@ -353,6 +366,7 @@ export class TandaService implements TandaUseCasesPort {
       tanda,
       numeroAsignado: pedidos[0],
       numerosAsignados: pedidos,
+      consecutivos,
       isDeadNumber: false,
     };
   }

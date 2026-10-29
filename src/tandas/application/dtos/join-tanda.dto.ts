@@ -27,6 +27,10 @@ export const zJoinTanda = z.object({
     .int('La cantidad debe ser un número entero')
     .min(1, 'La cantidad debe ser mayor o igual a 1')
     .optional(),
+
+  consecutivos: z
+    .boolean({ invalid_type_error: 'El campo "consecutivos" debe ser verdadero o falso' })
+    .optional(),
 });
 
 export type JoinTandaDto = z.infer<typeof zJoinTanda>;

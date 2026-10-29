@@ -59,12 +59,16 @@ export interface JoinTandaCommand {
   /** Números elegidos; si se omite se asignan los primeros `cantidad` libres. */
   selectedNumbers?: number[];
   cantidad?: number;
+  /** Solo sorteo: pedir un bloque de números seguidos. */
+  consecutivos?: boolean;
 }
 
 export interface JoinTandaResult {
   tanda: Tanda;
   numeroAsignado: number;
   numerosAsignados: number[];
+  /** Solo sorteo: si los números asignados forman un bloque seguido. */
+  consecutivos?: boolean;
   isDeadNumber: boolean;
 }
 
