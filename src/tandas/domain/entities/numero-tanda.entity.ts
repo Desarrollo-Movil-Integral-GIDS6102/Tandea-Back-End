@@ -4,6 +4,9 @@ import {
   NumeroFueraDeRangoError,
 } from '../errors/numero.errors';
 
+/** El número muerto (caja de respaldo) siempre es el #0; los participantes usan #1..#N. */
+export const NUMERO_MUERTO = 0;
+
 export type NumeroStatus =
   | 'PENDIENTE'
   | 'EN_RIESGO'
@@ -41,8 +44,9 @@ export class NumeroTanda {
   }
 
   private validate(): void {
-    if (this.props.numberValue < 1) {
-      throw new NumeroFueraDeRangoError(this.props.numberValue, 1);
+    const minimo = this.props.isDeadNumber ? NUMERO_MUERTO : 1;
+    if (this.props.numberValue < minimo) {
+      throw new NumeroFueraDeRangoError(this.props.numberValue, minimo);
     }
     if (this.props.roundNumber < 1) {
       throw new Error('El número de vuelta debe ser mayor o igual a 1');

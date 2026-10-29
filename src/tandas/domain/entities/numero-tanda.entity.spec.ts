@@ -55,6 +55,15 @@ describe('[AP-02] Entidad de Dominio NumeroTanda', () => {
     expect(() => num.asignarA(20)).toThrow(NumeroMuertoNoElegibleError);
   });
 
+  it('acepta el #0 solo si es el número muerto', () => {
+    expect(
+      () => new NumeroTanda({ ...baseProps, numberValue: 0, isDeadNumber: true, idUser: null }),
+    ).not.toThrow();
+    expect(() => new NumeroTanda({ ...baseProps, numberValue: 0 })).toThrow(
+      NumeroFueraDeRangoError,
+    );
+  });
+
   it('debe lanzar NumeroFueraDeRangoError si numberValue es menor a 1', () => {
     expect(
       () =>

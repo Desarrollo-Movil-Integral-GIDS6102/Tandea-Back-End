@@ -95,11 +95,27 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(mockNumberRepo.createNumber).toHaveBeenCalledWith({
         idTanda: 1,
         roundNumber: 1,
-        numberValue: 6,
+        numberValue: 0,
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
       });
+    });
+
+    it('sin número muerto no crea el #0', async () => {
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(null);
+      vi.spyOn(mockTandaRepo, 'create').mockResolvedValue(new Tanda(mockTandaData));
+
+      await service.crearTanda({
+        name: 'Tanda sin respaldo',
+        startDate: '2026-11-01',
+        contributionAmount: 1000,
+        numParticipants: 5,
+        hasDeadNumber: false,
+        idAdmin: 10,
+      });
+
+      expect(mockNumberRepo.createNumber).not.toHaveBeenCalled();
     });
 
     it('debe permitir crear una tanda con el mínimo válido de 3 participantes', async () => {
@@ -350,8 +366,8 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
     it('el número muerto no ocupa lugar: una tanda de 3 admite 3 números de personas', async () => {
       const tanda = new Tanda({ ...mockTandaData, numParticipants: 3, hasDeadNumber: true });
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      // #1 y #2 apartados, #4 es el número muerto
-      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 4]);
+      // #1 y #2 apartados, #0 es el número muerto
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([0, 1, 2]);
 
       const res = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30 });
 

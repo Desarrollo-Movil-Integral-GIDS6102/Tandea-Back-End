@@ -108,7 +108,7 @@ describe('[AP-02] ElegirNumeroService (Caso de uso Elegir Número)', () => {
     ).rejects.toThrow(NumeroFueraDeRangoError);
   });
 
-  it('debe permitir seleccionar el número adicional si la tanda tiene número muerto configurado', async () => {
+  it('con número muerto el rango sigue siendo #1..#N y el #0 no se puede elegir', async () => {
     const tandaConMuerto = new Tanda({
       idTanda: 10,
       name: 'Tanda Con Muerto',
@@ -126,18 +126,12 @@ describe('[AP-02] ElegirNumeroService (Caso de uso Elegir Número)', () => {
     });
     vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tandaConMuerto);
 
-    // Si el número 6 es el muerto, el repo atómico lanzará NumeroMuertoNoElegibleError
-    vi.spyOn(mockNumberRepo, 'asignarSiLibre').mockRejectedValue(
-      new NumeroMuertoNoElegibleError(6),
-    );
-
-    await expect(
-      service.elegirNumero({
-        idTanda: 10,
-        idUsuario: 42,
-        valorNumero: 6,
-      }),
-    ).rejects.toThrow(NumeroMuertoNoElegibleError);
+    for (const valorNumero of [0, 6]) {
+      await expect(
+        service.elegirNumero({ idTanda: 10, idUsuario: 42, valorNumero }),
+      ).rejects.toThrow(NumeroFueraDeRangoError);
+    }
+    expect(mockNumberRepo.asignarSiLibre).not.toHaveBeenCalled();
   });
 
   it('debe propagar NumeroYaTomadoError si el repositorio detecta que el número ya está ocupado', async () => {

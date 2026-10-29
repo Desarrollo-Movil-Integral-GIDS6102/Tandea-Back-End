@@ -43,10 +43,9 @@ export class ElegirNumeroService implements ElegirNumeroUseCasePort {
       throw new NumeroInexistenteError(command.valorNumero, command.idTanda);
     }
 
-    // 2. Validar rango permitido para el número según la configuración de la tanda
-    const maxNumeros = tanda.numParticipants + (tanda.hasDeadNumber ? 1 : 0);
-    if (command.valorNumero < 1 || command.valorNumero > maxNumeros) {
-      throw new NumeroFueraDeRangoError(command.valorNumero, maxNumeros);
+    // 2. Los participantes eligen #1..#N; el #0 es el número muerto y nunca se elige
+    if (command.valorNumero < 1 || command.valorNumero > tanda.numParticipants) {
+      throw new NumeroFueraDeRangoError(command.valorNumero, tanda.numParticipants);
     }
 
     // 3. Asignación atómica mediante el puerto de salida

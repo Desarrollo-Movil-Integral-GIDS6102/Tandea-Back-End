@@ -18,6 +18,7 @@ import {
   TandaConDisponibles,
 } from '../../domain/ports/in/tanda-use-cases.port';
 import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
+import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
 import { Tanda, TandaStatus } from '../../domain/entities/tanda.entity';
@@ -85,7 +86,7 @@ export class TandaService implements TandaUseCasesPort {
       await this.numberRepository.createNumber({
         idTanda: tandaCreada.idTanda,
         roundNumber: 1,
-        numberValue: tandaCreada.numParticipants + 1, // Turno extra después de los participantes
+        numberValue: NUMERO_MUERTO, // Siempre #0: los participantes usan #1..#N
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
