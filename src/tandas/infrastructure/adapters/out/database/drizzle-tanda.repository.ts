@@ -293,7 +293,12 @@ export class DrizzleTandaRepository
       // Otro usuario apartó alguno de los números entre la consulta y el insert
       const code = error?.code || error?.cause?.code;
       if (code === '23505') {
-        throw new NumeroYaTomadoError(data[0].numberValue, data[0].roundNumber);
+        // detail: Key (id_tanda, round_number, number_value)=(7, 1, 3) already exists.
+        const detail: string = error?.detail ?? error?.cause?.detail ?? '';
+        const tomado = /=\(\d+, (\d+), (\d+)\)/.exec(detail);
+        throw tomado
+          ? new NumeroYaTomadoError(Number(tomado[2]), Number(tomado[1]))
+          : new NumeroYaTomadoError(data[0].numberValue, data[0].roundNumber);
       }
       throw error;
     }

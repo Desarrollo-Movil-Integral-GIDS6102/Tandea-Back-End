@@ -3,6 +3,7 @@ import { TandaService } from '../src/tandas/application/services/tanda.service';
 import { TandaRepositoryPort } from '../src/tandas/domain/ports/out/tanda-repository.port';
 import { NumberRepositoryPort } from '../src/tandas/domain/ports/out/number-repository.port';
 import { Tanda } from '../src/tandas/domain/entities/tanda.entity';
+import { NumeroYaTomadoError } from '../src/tandas/domain/errors/numero.errors';
 import {
   BadRequestException,
   ConflictException,
@@ -346,11 +347,34 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
           idUser: 30,
           selectedNumbers: [2],
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow('El número #2 ya fue tomado por otro participante. Elige otro.');
+      expect(mockNumberRepo.createNumbers).not.toHaveBeenCalled();
+    });
+
+    it('en Tradicional exige elegir números y nunca asigna otro', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, cantidad: 1 }),
+      ).rejects.toThrow('Elige al menos un número');
+      expect(mockNumberRepo.createNumbers).not.toHaveBeenCalled();
+    });
+
+    it('si otro participante toma un número a la vez, rechaza todo y nombra el número', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([]);
+      vi.spyOn(mockNumberRepo, 'createNumbers').mockRejectedValue(new NumeroYaTomadoError(4));
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [3, 4] }),
+      ).rejects.toThrow('El número #4 ya fue tomado por otro participante. Elige otro.');
     });
 
     it('debe asignar automáticamente los primeros números libres según la cantidad', async () => {
-      const tanda = new Tanda(mockTandaData);
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 3]);
 
@@ -369,7 +393,11 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       // #1 y #2 apartados, #0 es el número muerto
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([0, 1, 2]);
 
-      const res = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30 });
+      const res = await service.unirseTanda({
+        inviteCode: 'TND-TEST01',
+        idUser: 30,
+        selectedNumbers: [3],
+      });
 
       expect(res.numeroAsignado).toBe(3);
       expect(mockTandaRepo.updateStatus).not.toHaveBeenCalled();

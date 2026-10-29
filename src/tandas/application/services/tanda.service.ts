@@ -24,6 +24,9 @@ import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/
 import { Tanda, TandaStatus } from '../../domain/entities/tanda.entity';
 import { InviteCodeGenerator } from '../../domain/utils/invite-code.generator';
 
+const numeroTomadoMensaje = (n: number): string =>
+  `El número #${n} ya fue tomado por otro participante. Elige otro.`;
+
 @Injectable()
 export class TandaService implements TandaUseCasesPort {
   constructor(
@@ -297,6 +300,11 @@ export class TandaService implements TandaUseCasesPort {
     }
 
     // Un usuario (incluido el organizador) puede apartar uno o varios números
+    // En Tradicional el participante elige; nunca se reasigna otro número
+    if (!tanda.esSorteo && !command.selectedNumbers?.length) {
+      throw new BadRequestException('Elige al menos un número');
+    }
+
     let pedidos: number[];
     if (command.selectedNumbers?.length) {
       pedidos = [...new Set(command.selectedNumbers)];
@@ -307,7 +315,7 @@ export class TandaService implements TandaUseCasesPort {
           );
         }
         if (!libres.includes(n)) {
-          throw new ConflictException(`El turno número ${n} ya está ocupado`);
+          throw new ConflictException(numeroTomadoMensaje(n));
         }
       }
     } else {
@@ -333,9 +341,8 @@ export class TandaService implements TandaUseCasesPort {
       );
     } catch (error) {
       if (error instanceof NumeroYaTomadoError) {
-        throw new ConflictException(
-          'Alguno de los números que elegiste acaba de ser apartado. Actualiza y elige de nuevo.',
-        );
+        // El insert es una sola sentencia: no se apartó ninguno de los números pedidos
+        throw new ConflictException(numeroTomadoMensaje(error.numero));
       }
       throw error;
     }

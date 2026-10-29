@@ -1,5 +1,8 @@
 export type TandaStatus = 'PENDIENTE' | 'ACTIVA' | 'FINALIZADA' | 'SUSPENDIDA' | 'CANCELADA';
 
+/** tanda_type.id de "Sorteo" (seed: 1 Tradicional, 2 Sorteo, 3 Solidaria). */
+export const ID_TIPO_SORTEO = 2;
+
 export interface TandaProps {
   idTanda?: number;
   name: string;
@@ -55,6 +58,7 @@ export class Tanda {
   get graceDays(): number { return this.props.graceDays; }
   get hasDeadNumber(): boolean { return this.props.hasDeadNumber; }
   get idTandaType(): number { return this.props.idTandaType; }
+  get esSorteo(): boolean { return this.props.idTandaType === ID_TIPO_SORTEO; }
   get idAdmin(): number { return this.props.idAdmin; }
   get status(): TandaStatus { return this.props.status ?? 'PENDIENTE'; }
   get active(): boolean { return this.props.active ?? true; }
