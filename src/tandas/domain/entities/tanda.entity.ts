@@ -59,6 +59,8 @@ export class Tanda {
   get hasDeadNumber(): boolean { return this.props.hasDeadNumber; }
   get idTandaType(): number { return this.props.idTandaType; }
   get esSorteo(): boolean { return this.props.idTandaType === ID_TIPO_SORTEO; }
+  /** Se puede apartar números mientras la tanda esté pendiente o en curso. */
+  get aceptaParticipantes(): boolean { return this.status === 'PENDIENTE' || this.status === 'ACTIVA'; }
   get idAdmin(): number { return this.props.idAdmin; }
   get status(): TandaStatus { return this.props.status ?? 'PENDIENTE'; }
   get active(): boolean { return this.props.active ?? true; }

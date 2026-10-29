@@ -130,7 +130,7 @@ export class TandaService implements TandaUseCasesPort {
       rolUsuario,
       participantes,
       misNumeros: userNumbers,
-      numerosDisponibles: tanda.status === 'PENDIENTE' ? await this.numerosLibres(tanda) : [],
+      numerosDisponibles: tanda.aceptaParticipantes ? await this.numerosLibres(tanda) : [],
     };
   }
 
@@ -142,7 +142,7 @@ export class TandaService implements TandaUseCasesPort {
     }
     return {
       ...tanda.toPrimitives(),
-      numerosDisponibles: tanda.status === 'PENDIENTE' ? await this.numerosLibres(tanda) : [],
+      numerosDisponibles: tanda.aceptaParticipantes ? await this.numerosLibres(tanda) : [],
     };
   }
 
@@ -288,9 +288,10 @@ export class TandaService implements TandaUseCasesPort {
       throw new NotFoundException(`No existe una tanda activa con el código ${cleanCode}`);
     }
 
-    if (tanda.status !== 'PENDIENTE') {
+    // ACTIVA no bloquea: se puede unir mientras queden números libres
+    if (!tanda.aceptaParticipantes) {
       throw new BadRequestException(
-        'Esta tanda ya inició o terminó; ya no acepta nuevos participantes',
+        `La tanda está ${tanda.status.toLowerCase()} y ya no acepta participantes`,
       );
     }
 

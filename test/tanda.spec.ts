@@ -403,13 +403,52 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(mockTandaRepo.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('debe rechazar unirse si la tanda ya inició', async () => {
+    it('permite unirse a una tanda ACTIVA mientras queden números libres', async () => {
       const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 5]);
+
+      const res = await service.unirseTanda({
+        inviteCode: 'TND-TEST01',
+        idUser: 30,
+        selectedNumbers: [4],
+      });
+
+      expect(res.numerosAsignados).toEqual([4]);
+    });
+
+    it('rechaza con "sin números disponibles" solo cuando no queda ninguno', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 5]);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [4] }),
+      ).rejects.toThrow('La tanda ya no tiene números disponibles');
+    });
+
+    it('rechaza una tanda finalizada con un mensaje propio', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'FINALIZADA' });
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
 
       await expect(
-        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30 }),
-      ).rejects.toThrow(BadRequestException);
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [4] }),
+      ).rejects.toThrow('La tanda está finalizada y ya no acepta participantes');
+    });
+
+    it('el detalle y el código devuelven los mismos números libres en una tanda ACTIVA', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 5]);
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
+      vi.spyOn(mockNumberRepo, 'findNumbersByTanda').mockResolvedValue([]);
+
+      const porCodigo = await service.obtenerPorCodigoInvitacion('TND-TEST01');
+      const detalle = await service.obtenerTandaPorId(1, 10, 'usuario');
+
+      expect(porCodigo.numerosDisponibles).toEqual([4]);
+      expect(detalle.numerosDisponibles).toEqual([4]);
     });
   });
 });
