@@ -255,22 +255,6 @@ export class PagoService implements PagoUseCasesPort {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CASO DE USO: CONFIRMAR RECEPTOR (2da confirmación)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  async confirmarReceptor(id: number): Promise<Pago> {
-    const pago = await this.obtenerPago(id);
-
-    // Ejecuta las reglas de negocio en la entidad de dominio
-    pago.confirmarPorReceptor();
-
-    // Persiste el estado actualizado
-    const pagoActualizado = await this.pagoRepository.update(pago);
-
-    return pagoActualizado;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
   // CASO DE USO: ACTUALIZAR RESULTADO OCR
   // ─────────────────────────────────────────────────────────────────────────
 

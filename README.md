@@ -86,7 +86,7 @@ El sistema separa estrictamente la lógica del negocio de los detalles técnicos
 ### Principios Fundamentales:
 1. **Dominio Agnóstico (`src/<modulo>/domain`):**
    - TypeScript puro. **Prohibido importar `@nestjs/*`, `fastify`, `drizzle-orm` o paquetes de transporte/persistencia.**
-   - Las entidades encapsulan estado y métodos de negocio (`confirmarPorOrganizador()`, `confirmarPorReceptor()`, etc.).
+   - Las entidades encapsulan estado y métodos de negocio (`confirmarPorOrganizador()`, `rechazar()`, etc.).
    - Lanza errores puros que heredan de `DomainError` (ej. `PagoYaConfirmadoError`).
 2. **Puertos (`domain/ports/`):**
    - **Inbound Ports (`ports/in/`):** Interfaces que exponen los casos de uso disponibles (`PagoUseCasesPort`).
@@ -506,13 +506,6 @@ Todas las rutas tienen el prefijo global: **`/api/v1`**.
   - `403 Forbidden`: Si el usuario autenticado no es el organizador (`id_admin`) de la tanda.
   - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
   - `422 Unprocessable Entity`: Si el pago ya fue confirmado o ya se encuentra rechazado (`PagoYaConfirmadoError`, `PagoYaRechazadoError`).
-
-#### 5. Confirmación del Receptor (2da Confirmación)
-* **Método:** `PATCH`
-* **Ruta:** `/api/v1/pagos/:id/confirmar-receptor`
-* **Descripción:** El receptor (ganador de la tanda) confirma la recepción del dinero.
-* **Transición de Estado:** Pasa a `confirmado`.
-* **Regla estricta:** El organizador **debe haber confirmado primero**. De lo contrario retorna `422 Unprocessable Entity`.
 
 ---
 

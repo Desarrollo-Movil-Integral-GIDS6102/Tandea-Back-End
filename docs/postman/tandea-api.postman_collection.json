@@ -794,23 +794,6 @@
               "path": ["pagos", "{{pagoId}}", "confirmar-organizador"]
             }
           }
-        },
-        {
-          "name": "3.5 Confirmar Pago por Receptor",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token_participante}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/pagos/{{pagoId}}/confirmar-receptor",
-              "host": ["{{baseUrl}}"],
-              "path": ["pagos", "{{pagoId}}", "confirmar-receptor"]
-            }
-          }
         }
       ]
     }

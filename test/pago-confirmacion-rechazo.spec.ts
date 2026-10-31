@@ -31,7 +31,6 @@ describe('PagoController — Confirmación y Rechazo (SP-3-[BE-PAGO] / AP-05)', 
     confirmar: vi.fn(),
     rechazar: vi.fn(),
     confirmarOrganizador: vi.fn(),
-    confirmarReceptor: vi.fn(),
     actualizarResultadoOcr: vi.fn(),
   };
 

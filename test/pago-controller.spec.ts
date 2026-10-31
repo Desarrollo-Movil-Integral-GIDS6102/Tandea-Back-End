@@ -88,7 +88,6 @@ describe('PagoController', () => {
     confirmar: vi.fn(),
     rechazar: vi.fn(),
     confirmarOrganizador: vi.fn(),
-    confirmarReceptor: vi.fn(),
     actualizarResultadoOcr: vi.fn(),
   };
 

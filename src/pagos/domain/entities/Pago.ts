@@ -2,7 +2,6 @@ import {
   ConfirmacionAdminPreviaError,
   ConfirmacionOrganizadorPreviaError,
   ConfirmacionParticipantePreviaError,
-  OrganizadorDebeConfirmarPrimeroError,
   PagoRechazadoError,
   PagoYaRechazadoError,
   PagoYaConfirmadoError,
@@ -348,27 +347,6 @@ export class Pago {
       throw new ConfirmacionOrganizadorPreviaError();
     }
     this.confirmarPorAdmin();
-  }
-
-  /**
-   * Compatibilidad para segundo paso de entrega al receptor.
-   */
-  public confirmarPorReceptor(): void {
-    if (this.props.status === 'RECHAZADO') {
-      throw new PagoRechazadoError();
-    }
-    if (this.estaConfirmado()) {
-      throw new PagoYaConfirmadoError();
-    }
-    if (!this.props.confirmedByAdmin) {
-      throw new OrganizadorDebeConfirmarPrimeroError();
-    }
-
-    const now = new Date();
-    this.props.confirmadoReceptorEn = now;
-    this.props.confirmedByParticipant = true;
-    this.props.status = 'CONFIRMADO';
-    this.props.updatedAt = now;
   }
 
   /**

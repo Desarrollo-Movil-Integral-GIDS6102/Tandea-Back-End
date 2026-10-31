@@ -43,6 +43,5 @@ export interface PagoUseCasesPort {
   confirmar(id: number, usuario: UsuarioAutenticado): Promise<Pago>;
   rechazar(id: number, motivo: string, usuario: UsuarioAutenticado): Promise<Pago>;
   confirmarOrganizador(id: number, usuario?: UsuarioAutenticado): Promise<Pago>;
-  confirmarReceptor(id: number): Promise<Pago>;
   actualizarResultadoOcr(id: number, montoDetectado: number): Promise<Pago>;
 }

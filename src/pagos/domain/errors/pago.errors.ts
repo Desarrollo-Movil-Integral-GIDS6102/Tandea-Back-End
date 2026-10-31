@@ -80,12 +80,6 @@ export class ConfirmacionAdminPreviaError extends DomainError {
   }
 }
 
-export class OrganizadorDebeConfirmarPrimeroError extends DomainError {
-  constructor() {
-    super('El organizador debe confirmar primero antes de que el receptor pueda confirmar');
-  }
-}
-
 export class ReglaNegocioPagoError extends DomainError {
   constructor(message: string) {
     super(message);
