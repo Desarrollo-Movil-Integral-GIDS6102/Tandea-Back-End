@@ -38,6 +38,7 @@ export function toDomain(row: PaymentRow, evidenceUrl: string | null = null): Pa
     status: row.status,
     confirmedByParticipant: row.confirmedByParticipant,
     confirmedByAdmin: row.confirmedByAdmin,
+    rejectionReason: row.rejectionReason ?? null,
     evidenceUrl,
     ocrDetectedAmount:
       row.ocrDetectedAmount != null ? parseFloat(row.ocrDetectedAmount) : null,
@@ -64,7 +65,8 @@ export function toPersistence(pago: Pago): NewPaymentRow {
     ocrVerified: p.ocrVerified ?? false,
     confirmedByParticipant: p.confirmedByParticipant,
     confirmedByAdmin: p.confirmedByAdmin,
-    status: p.status,
+    rejectionReason: p.rejectionReason ?? null,
+    status: p.status
   };
 }
 
@@ -83,6 +85,7 @@ export function toResponseDto(pago: Pago): PagoResponseDto {
     status: p.status,
     confirmedByParticipant: p.confirmedByParticipant,
     confirmedByAdmin: p.confirmedByAdmin,
+    rejectionReason: p.rejectionReason ?? null,
     ocrVerified: p.ocrVerified ?? false,
     ocrDetectedAmount: p.ocrDetectedAmount ?? null,
     evidenceUrl: p.evidenceUrl ?? null,

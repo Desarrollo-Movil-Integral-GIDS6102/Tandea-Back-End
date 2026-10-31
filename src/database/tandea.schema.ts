@@ -118,6 +118,25 @@ export const userTable = pgTable(
 );
 
 // -----------------------------------------------------------------------------
+// password_reset_code  (código de 6 dígitos para cambiar contraseña, se guarda hasheado)
+// -----------------------------------------------------------------------------
+export const passwordResetCodeTable = pgTable(
+  'password_reset_code',
+  {
+    idCode: serial('id_code').primaryKey(),
+    idUser: integer('id_user')
+      .notNull()
+      .references(() => userTable.idUser),
+    codeHash: varchar('code_hash', { length: 255 }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('password_reset_code_id_user_idx').on(t.idUser)],
+);
+
+// -----------------------------------------------------------------------------
 // tanda_type  (catálogo, sin deleted_at)
 // -----------------------------------------------------------------------------
 export const tandaTypeTable = pgTable('tanda_type', {
@@ -144,6 +163,7 @@ export const tandaTable = pgTable(
     numParticipants: integer('num_participants').notNull(),
     numRounds: integer('num_rounds').notNull(),
     graceDays: integer('grace_days').notNull(),
+    periodicity: varchar('periodicity', { length: 20 }).notNull().default('quincenal'),
     hasDeadNumber: boolean('has_dead_number').notNull().default(false),
     idTandaType: integer('id_tanda_type')
       .notNull()
@@ -225,6 +245,7 @@ export const paymentTable = pgTable(
       .notNull()
       .default(false),
     confirmedByAdmin: boolean('confirmed_by_admin').notNull().default(false),
+    rejectionReason: text('rejection_reason'),
     status: paymentStatusEnum('status').notNull().default('PENDIENTE'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -260,7 +281,10 @@ export const payoutTable = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('payout_id_number_idx').on(t.idNumber)],
+  (t) => [
+    index('payout_id_number_idx').on(t.idNumber),
+    index('payout_id_number_status_idx').on(t.idNumber, t.status),
+  ],
 );
 
 // -----------------------------------------------------------------------------

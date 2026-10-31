@@ -25,7 +25,7 @@ Backend del sistema **Tandea**, una plataforma moderna para la administración y
 Tandea digitaliza la gestión de tandas tradicionales:
 * **Gestión de rondas y participantes:** Asignación de turnos y números de pago.
 * **Control de pagos multicanal:** Pagos en efectivo, por transferencia o híbridos.
-* **Flujo de doble confirmación del pago:** el **participante** confirma al registrar su pago y el **organizador** lo confirma al validar que recibió el dinero. La confirmación del **receptor** (ganador del turno) pertenece a la entrega del dinero (`payout`, módulo de entregas).
+* **Flujo de doble confirmación:** Garantía de entrega donde primero confirma el **organizador** y posteriormente confirma el **receptor** (ganador del turno).
 * **Validación de comprobantes con OCR:** Comparación automática del comprobante bancario contra el monto esperado.
 
 El backend está optimizado para alta concurrencia y bajo consumo de recursos utilizando **Fastify** como motor HTTP.
@@ -86,7 +86,7 @@ El sistema separa estrictamente la lógica del negocio de los detalles técnicos
 ### Principios Fundamentales:
 1. **Dominio Agnóstico (`src/<modulo>/domain`):**
    - TypeScript puro. **Prohibido importar `@nestjs/*`, `fastify`, `drizzle-orm` o paquetes de transporte/persistencia.**
-   - Las entidades encapsulan estado y métodos de negocio (`confirmarPorParticipante()`, `confirmarPorOrganizador()`, etc.).
+   - Las entidades encapsulan estado y métodos de negocio (`confirmarPorOrganizador()`, `rechazar()`, etc.).
    - Lanza errores puros que heredan de `DomainError` (ej. `PagoYaConfirmadoError`).
 2. **Puertos (`domain/ports/`):**
    - **Inbound Ports (`ports/in/`):** Interfaces que exponen los casos de uso disponibles (`PagoUseCasesPort`).
@@ -151,30 +151,35 @@ Tandea-Back-End/
 │   ├── tandas/                             # Módulo funcional de Tandas (Arquitectura Hexagonal)
 │   │   ├── domain/                         # 1. NÚCLEO: Dominio puro
 │   │   │   ├── entities/
-│   │   │   │   └── tanda.entity.ts         # Entidad rica Tanda (validaciones, estados)
+│   │   │   │   ├── tanda.entity.ts         # Entidad rica Tanda (validaciones, estados)
+│   │   │   │   └── numero-tanda.entity.ts  # Entidad rica NumeroTanda (asignación atómica AP-02)
 │   │   │   ├── errors/
 │   │   │   │   ├── tanda.errors.ts         # DomainError y PlanTandaInvalidoError
-│   │   │   │   └── numero.errors.ts        # NumeroYaTomadoError (turno ya tomado, 409)
+│   │   │   │   └── numero.errors.ts        # NumeroYaTomadoError, NumeroMuertoNoElegibleError, etc.
 │   │   │   ├── services/
 │   │   │   │   └── calcular-plan.ts        # Cálculo puro de plan financiero y turnos (AP-01)
 │   │   │   └── ports/
 │   │   │       ├── in/
 │   │   │       │   ├── tanda-use-cases.port.ts
-│   │   │       │   └── create-tanda-use-case.port.ts
+│   │   │       │   ├── create-tanda-use-case.port.ts
+│   │   │       │   └── elegir-numero-use-case.port.ts
 │   │   │       └── out/
 │   │   │           ├── tanda-repository.port.ts
 │   │   │           └── number-repository.port.ts
 │   │   ├── application/                    # 2. APLICACIÓN: Orquestación
 │   │   │   ├── dtos/
 │   │   │   └── services/
-│   │   │       └── tanda.service.ts
+│   │   │       ├── tanda.service.ts
+│   │   │       └── elegir-numero.service.ts
 │   │   ├── infrastructure/                 # 3. INFRAESTRUCTURA: Adaptadores
 │   │   │   └── adapters/
 │   │   │       ├── in/http/
 │   │   │       │   ├── tanda.controller.ts
 │   │   │       │   └── filters/
-│   │   │       │       └── tanda-domain-exception.filter.ts # DomainError ➔ 409/400/422
+│   │   │       │       └── tanda-domain-exception.filter.ts # DomainError ➔ 404/409/400/422
 │   │   │       └── out/database/
+│   │   │           ├── mappers/
+│   │   │           │   └── numero.mapper.ts
 │   │   │           └── drizzle-tanda.repository.ts # Implementa TandaRepositoryPort y NumberRepositoryPort
 │   │   └── tanda.module.ts                 # NestJS Module conectando puertos y adaptadores
 │   ├── app.controller.ts                   # Controlador de salud/bienvenida
@@ -418,83 +423,105 @@ Todas las rutas tienen el prefijo global: **`/api/v1`**.
 #### 1. Registrar Pago
 * **Método:** `POST`
 * **Ruta:** `/api/v1/pagos`
-* **Cabecera requerida:** `Authorization: Bearer <token>` (el número debe pertenecer al usuario del token)
-* **Cuerpo de la Petición (`Content-Type: multipart/form-data`):**
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `idNumber` | entero | Número (turno) del participante que paga. La cuota se toma de su tanda. |
-| `metodoPago` | texto | `efectivo`, `transferencia` o `hibrido`. |
-| `transferAmount` | número | Monto por transferencia (máx. 2 decimales). |
-| `cashAmount` | número | Monto en efectivo (máx. 2 decimales). |
-| `file` | archivo | Comprobante JPG, PNG o PDF de hasta 10 MB. Obligatorio en `transferencia` e `hibrido`. |
-
-```bash
-curl -X POST {{baseUrl}}/pagos   -H "Authorization: Bearer <token>"   -F idNumber=12 -F metodoPago=hibrido   -F transferAmount=600 -F cashAmount=400   -F file=@spei.png
+* **Estado Exitoso:** `201 Created`
+* **Cuerpo de la Petición (`Content-Type: application/json`):**
+```json
+{
+  "tandaId": "d3b07384-d113-4e89-a5e2-636a2829ec37",
+  "participanteId": "a2c145e8-5b43-4217-bf39-847291a1829e",
+  "numeroPago": 1,
+  "monto": 1000.00,
+  "montoEfectivo": 400.00,
+  "montoTransferencia": 600.00,
+  "metodoPago": "hibrido",
+  "comprobanteUrl": "https://storage.tandea.app/comprobantes/pago_1.jpg",
+  "fechaPago": "2026-10-05T16:00:00.000Z"
+}
 ```
 * **Respuesta (`201 Created`):**
 ```json
 {
-  "idPayment": 45,
-  "idNumber": 12,
+  "id": "78b4081c-811c-43f1-b847-f3c1bc91703d",
+  "tandaId": "d3b07384-d113-4e89-a5e2-636a2829ec37",
+  "participanteId": "a2c145e8-5b43-4217-bf39-847291a1829e",
+  "numeroPago": 1,
+  "monto": 1000,
+  "montoEfectivo": 400,
+  "montoTransferencia": 600,
   "metodoPago": "hibrido",
-  "transferAmount": 600,
-  "cashAmount": 400,
-  "totalAmount": 1000,
-  "status": "PENDIENTE",
-  "confirmedByParticipant": true,
-  "confirmedByAdmin": false,
-  "ocrVerified": false,
-  "ocrDetectedAmount": null,
-  "evidenceUrl": "https://res.cloudinary.com/<cloud>/image/upload/comprobantes/pago_numero_12_1760000000000.png",
+  "estado": "pendiente",
+  "comprobanteUrl": "https://storage.tandea.app/comprobantes/pago_1.jpg",
+  "montoOcrValidado": null,
+  "ocrAprobado": null,
+  "confirmadoOrganizadorEn": null,
+  "confirmadoReceptorEn": null,
+  "fechaPago": "2026-10-05T16:00:00.000Z",
   "createdAt": "2026-10-05T16:20:00.000Z",
   "updatedAt": "2026-10-05T16:20:00.000Z"
 }
 ```
-* **Errores:**
-  - `400 Bad Request`: El comprobante no es JPG, PNG o PDF, o está vacío.
-  - `403 Forbidden`: El número no pertenece al usuario del token (`NumeroAjenoError`).
-  - `404 Not Found`: El número o su tanda no existen.
-  - `409 Conflict`: Ya hay un pago pendiente o confirmado para ese número (`PagoDuplicadoError`).
-  - `413 Payload Too Large`: El comprobante pesa más de 10 MB.
-  - `422 Unprocessable Entity`: Campos inválidos, la suma no coincide con la cuota o falta el comprobante.
 
 #### 2. Obtener Pago por ID
 * **Método:** `GET`
 * **Ruta:** `/api/v1/pagos/:id`
-* **Parámetros:** `:id` (entero, `idPayment`)
+* **Parámetros:** `:id` (UUID)
 * **Respuestas:**
-  - `200 OK`: Retorna el objeto `PagoResponseDto` (mismos campos que la respuesta de registro).
+  - `200 OK`: Retorna el objeto `PagoResponseDto`.
   - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
 
-#### 3. Confirmación del Organizador
+#### 3. Confirmación del Pago por el Organizador (AP-05)
 * **Método:** `PATCH`
-* **Ruta:** `/api/v1/pagos/:id/confirmar-organizador`
-* **Cabecera requerida:** `Authorization: Bearer <token>` del **organizador** de la tanda (`tanda.id_admin`).
-* **Descripción:** El organizador valida que recibió el pago en efectivo o verificó la transferencia. El participante ya confirmó al registrar el pago (`confirmed_by_participant = true`), así que esta confirmación cierra la doble confirmación.
-* **Transición de Estado:** Pasa de `PENDIENTE` a `CONFIRMADO` (`confirmed_by_admin = true`).
+* **Ruta:** `/api/v1/pagos/:id/confirmar`
+* **Autorización:** Protegido con `TandaMemberGuard`. Solo el organizador / administrador de la tanda (`id_admin`) o administradores globales (`admin_global`) pueden ejecutarlo.
+* **Descripción:** El organizador valida que recibió el pago. Actualiza `confirmed_by_admin = true` y recalcula dinámicamente el estado.
+* **Transición de Estado:** Pasa de `pendiente` a `confirmado_parcial` (o a `confirmado` si el receptor ya hubiese confirmado).
+* **Eventos de Dominio:** Emite `pago.confirmado`.
 * **Respuestas:**
-  - `200 OK`: Retorna el pago actualizado.
-  - `403 Forbidden`: Quien llama no es el organizador de la tanda (`NoEsOrganizadorError`).
-  - `404 Not Found`: Si el pago no existe.
-  - `422 Unprocessable Entity`: Si el pago ya fue confirmado previamente o fue rechazado.
+  - `200 OK`: Retorna el objeto `PagoResponseDto` actualizado.
+  - `401 Unauthorized`: Token JWT ausente o inválido.
+  - `403 Forbidden`: Si el usuario autenticado no es el organizador (`id_admin`) de la tanda.
+  - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
+  - `422 Unprocessable Entity`: Si el pago ya fue confirmado previamente o ya está rechazado (`PagoYaConfirmadoError`, `PagoYaRechazadoError`).
 
-> La confirmación de recepción por el ganador del turno no es parte del pago: se registra en la entrega del dinero (tabla `payout`, columnas `confirmed_by_admin` y `confirmed_by_recipient`), en el módulo de entregas (AP-07).
+*(Nota: la ruta `/api/v1/pagos/:id/confirmar-organizador` se mantiene disponible por retrocompatibilidad).*
+
+#### 4. Rechazo del Pago por el Organizador (AP-05)
+* **Método:** `PATCH`
+* **Ruta:** `/api/v1/pagos/:id/rechazar`
+* **Autorización:** Protegido con `TandaMemberGuard`. Solo el organizador / administrador de la tanda (`id_admin`) o administradores globales (`admin_global`) pueden ejecutarlo.
+* **Descripción:** El organizador rechaza el pago indicando el motivo correspondiente. Guarda `rejection_reason` y pasa el estado a `rechazado`.
+* **Cuerpo de la Petición (`Content-Type: application/json`):**
+```json
+{
+  "motivo": "El comprobante adjunto es ilegible o no coincide con los movimientos de la cuenta receptora"
+}
+```
+*(Validación con Zod: `motivo` string obligatorio, mínimo 5 caracteres, máximo 500 caracteres).*
+* **Transición de Estado:** Pasa a `rechazado`.
+* **Eventos de Dominio:** Emite `pago.rechazado`.
+* **Respuestas:**
+  - `200 OK`: Retorna el objeto `PagoResponseDto` con `estado: "rechazado"` y `rejectionReason`.
+  - `400 Bad Request / 422 Unprocessable Entity`: Si el cuerpo de la petición no cumple el esquema de validación Zod.
+  - `401 Unauthorized`: Token JWT ausente o inválido.
+  - `403 Forbidden`: Si el usuario autenticado no es el organizador (`id_admin`) de la tanda.
+  - `404 Not Found`: Si el pago no existe (`PagoNotFoundError`).
+  - `422 Unprocessable Entity`: Si el pago ya fue confirmado o ya se encuentra rechazado (`PagoYaConfirmadoError`, `PagoYaRechazadoError`).
 
 ---
 
 ## ⚖ Reglas de Negocio del Dominio
 
 1. **Métodos de Pago:**
-   - `'efectivo'`: `cashAmount` debe ser igual a la cuota de la tanda. `transferAmount` debe ser `0`. El comprobante es opcional.
-   - `'transferencia'`: `transferAmount` debe ser igual a la cuota. `cashAmount` debe ser `0`. El comprobante (`file`) es **obligatorio**.
-   - `'hibrido'`: `cashAmount > 0` y `transferAmount > 0`, ambos con un máximo de 2 decimales y su suma exacta comparada en **centavos enteros** debe igualar la cuota. El comprobante (`file`) es **obligatorio**. Si la suma discrepa o los montos son inválidos, se rechaza con `HTTP 422 Unprocessable Entity` (AP-03).
+   - `'efectivo'`: `montoEfectivo` debe ser igual a `monto`. `montoTransferencia` debe ser `0`.
+   - `'transferencia'`: `montoTransferencia` debe ser igual a `monto`. `montoEfectivo` debe ser `0`. `comprobanteUrl` es **obligatorio**.
+   - `'hibrido'`: `montoEfectivo > 0` y `montoTransferencia > 0`, ambos con un máximo de 2 decimales y su suma exacta comparada en **centavos enteros** debe igualar a `monto`. `comprobanteUrl` es **obligatorio**. Si la suma discrepa o los montos son inválidos, se rechaza con `HTTP 422 Unprocessable Entity` (AP-03).
 2. **Ciclo de Vida y Estados del Pago:**
-   - `PENDIENTE`: Estado inicial al registrar el pago (el participante ya confirmó; falta el organizador).
-   - `CONFIRMADO`: Participante y organizador confirmaron. El pago está completado.
-   - `RECHAZADO`: Comprobante fraudulento o discrepancia de fondos.
+   - `pendiente`: Estado inicial al registrar el pago.
+   - `confirmado_parcial`: El organizador confirmó la recepción del aporte.
+   - `confirmado`: Ambos (organizador y receptor) confirmaron. El pago está completado y liquidado.
+   - `rechazado`: Comprobante fraudulento o discrepancia de fondos.
 3. **Tolerancia OCR:**
-   - Al comparar el monto detectado en la imagen bancaria contra `transferAmount`, se aplica una tolerancia de `±1.00 MXN` para admitir posibles variaciones de redondeo o comisión bancaria.
+   - Al comparar el monto detectado en la imagen bancaria contra `montoTransferencia`, se aplica una tolerancia de `±1.00 MXN` para admitir posibles variaciones de redondeo o comisión bancaria.
 
 ---
 
@@ -539,8 +566,6 @@ Configura las siguientes variables en la sección **Variables** del servicio en 
 | `NODE_ENV` | Entorno de ejecución | `production` |
 | `CORS_ORIGIN` | Orígenes permitidos (`*` para permitir cualquier origen) | `*` |
 | `JWT_SECRET` | Clave secreta para firmar y validar tokens de autenticación JWT | `tu_clave_secreta_jwt` |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Credenciales de Cloudinary para guardar comprobantes en `comprobantes/` | `tu_cloud_name` |
-| `GOOGLE_VISION_KEY` | API key de Google Cloud con la Vision API habilitada, para leer el monto del comprobante (AP-04). Vacía = OCR desactivado y el pago queda para revisión manual | `AIza...` |
 
 > **Nota sobre SSL en Railway:**
 > - Si el backend y la base de datos están en el mismo proyecto de Railway y se comunican mediante la red interna (`postgres.railway.internal`), **no se requiere SSL** (`DATABASE_SSL=false`).
@@ -552,7 +577,7 @@ El archivo `railway.json` orquesta automáticamente el ciclo de vida del desplie
 - **Build Command:** `npm run build` (compila la aplicación NestJS en `dist/`).
 - **Pre-Deploy Command:** `npm run db:migrate` (aplica las migraciones pendientes de Drizzle ORM a PostgreSQL antes de que entre en servicio la nueva versión).
 - **Start Command:** `npm run start:prod` (inicia el servidor de producción con `node dist/main.js`).
-- **Healthcheck Path:** `/api/v1/health` (Railway sondea esta ruta para validar que el contenedor esté listo antes de dirigir el tráfico de red).
+- **Healthcheck Path:** `/health` (Railway sondea esta ruta para validar que el contenedor esté listo antes de dirigir el tráfico de red).
 
 ### Verificación del Health Check
 
@@ -560,10 +585,10 @@ Una vez desplegado el servicio, puedes verificar la disponibilidad del backend m
 
 ```bash
 # En el entorno desplegado en Railway:
-curl https://<tu-servicio>.up.railway.app/api/v1/health
+curl https://<tu-servicio>.up.railway.app/health
 
 # En entorno local:
-curl http://localhost:3000/api/v1/health
+curl http://localhost:3000/health
 ```
 
 **Respuesta esperada (HTTP 200 OK):**

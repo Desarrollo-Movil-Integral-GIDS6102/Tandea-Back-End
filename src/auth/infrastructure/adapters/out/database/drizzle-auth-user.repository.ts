@@ -1,13 +1,19 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import {
   AuthUserRepositoryPort,
   CreateUserData,
   AuthRoleData,
+  UpdateProfileData,
+  PasswordResetCodeRecord,
 } from '../../../../domain/ports/out/auth-user-repository.port';
 import { AuthUserEntity } from '../../../../domain/entities/auth-user.entity';
-import { userTable, roleTable } from '../../../../../database/tandea.schema';
+import {
+  userTable,
+  roleTable,
+  passwordResetCodeTable,
+} from '../../../../../database/tandea.schema';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
 
 @Injectable()
@@ -165,5 +171,62 @@ export class DrizzleAuthUserRepository implements AuthUserRepositoryPort {
       inserted.age,
       inserted.gender,
     );
+  }
+
+  async updateProfile(idUser: number, data: UpdateProfileData): Promise<AuthUserEntity | null> {
+    await this.db.update(userTable).set(data).where(eq(userTable.idUser, idUser));
+    return this.findById(idUser);
+  }
+
+  async updatePassword(idUser: number, passwordHash: string): Promise<void> {
+    await this.db.update(userTable).set({ passwordHash }).where(eq(userTable.idUser, idUser));
+  }
+
+  async createPasswordResetCode(idUser: number, codeHash: string, expiresAt: Date): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(passwordResetCodeTable)
+        .set({ usedAt: new Date() })
+        .where(
+          and(eq(passwordResetCodeTable.idUser, idUser), isNull(passwordResetCodeTable.usedAt)),
+        );
+      await tx.insert(passwordResetCodeTable).values({ idUser, codeHash, expiresAt });
+    });
+  }
+
+  async findActivePasswordResetCode(idUser: number): Promise<PasswordResetCodeRecord | null> {
+    const [row] = await this.db
+      .select({
+        idCode: passwordResetCodeTable.idCode,
+        codeHash: passwordResetCodeTable.codeHash,
+        attempts: passwordResetCodeTable.attempts,
+        createdAt: passwordResetCodeTable.createdAt,
+      })
+      .from(passwordResetCodeTable)
+      .where(
+        and(
+          eq(passwordResetCodeTable.idUser, idUser),
+          isNull(passwordResetCodeTable.usedAt),
+          gt(passwordResetCodeTable.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(passwordResetCodeTable.createdAt))
+      .limit(1);
+
+    return row ?? null;
+  }
+
+  async incrementPasswordResetAttempts(idCode: number): Promise<void> {
+    await this.db
+      .update(passwordResetCodeTable)
+      .set({ attempts: sql`${passwordResetCodeTable.attempts} + 1` })
+      .where(eq(passwordResetCodeTable.idCode, idCode));
+  }
+
+  async markPasswordResetCodeUsed(idCode: number): Promise<void> {
+    await this.db
+      .update(passwordResetCodeTable)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetCodeTable.idCode, idCode));
   }
 }

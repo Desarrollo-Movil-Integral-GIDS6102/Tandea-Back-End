@@ -3,7 +3,9 @@ import {
   ConfirmacionOrganizadorPreviaError,
   ConfirmacionParticipantePreviaError,
   PagoRechazadoError,
+  PagoYaRechazadoError,
   PagoYaConfirmadoError,
+  MotivoRechazoRequeridoError,
 } from '../errors/pago.errors';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'hibrido';
@@ -13,7 +15,8 @@ export type EstadoPago =
   | 'RECHAZADO'
   | 'pendiente'
   | 'confirmado'
-  | 'rechazado';
+  | 'rechazado'
+  | 'confirmado_parcial';
 
 export interface PagoProps {
   idPayment?: number;
@@ -29,6 +32,7 @@ export interface PagoProps {
   evidenceUrl?: string | null;
   ocrDetectedAmount?: number | null;
   ocrVerified?: boolean;
+  rejectionReason?: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -37,6 +41,7 @@ export interface PagoProps {
   participanteId?: string;
   numeroPago?: number;
   confirmadoOrganizadorEn?: Date | null;
+  confirmadoReceptorEn?: Date | null;
   fechaPago?: Date;
 }
 
@@ -54,6 +59,7 @@ export type CreatePagoProps = {
   evidenceUrl?: string | null;
   ocrDetectedAmount?: number | null;
   ocrVerified?: boolean;
+  rejectionReason?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 
@@ -92,6 +98,7 @@ export class Pago {
       evidenceUrl: props.evidenceUrl ?? null,
       ocrDetectedAmount: props.ocrDetectedAmount ?? null,
       ocrVerified: Boolean(props.ocrVerified),
+      rejectionReason: props.rejectionReason ?? null,
     });
   }
 
@@ -127,12 +134,14 @@ export class Pago {
       evidenceUrl,
       ocrDetectedAmount: props.ocrDetectedAmount ?? null,
       ocrVerified: props.ocrVerified ?? false,
+      rejectionReason: props.rejectionReason ?? null,
       createdAt: props.createdAt ?? now,
       updatedAt: props.updatedAt ?? now,
       tandaId: props.tandaId,
       participanteId: props.participanteId,
       numeroPago: props.numeroPago,
       confirmadoOrganizadorEn: confirmedByAdmin ? now : null,
+      confirmadoReceptorEn: null,
       fechaPago: props.fechaPago ?? now,
     });
   }
@@ -191,6 +200,10 @@ export class Pago {
     return this.props.ocrVerified ?? false;
   }
 
+  get rejectionReason(): string | null {
+    return this.props.rejectionReason ?? null;
+  }
+
   get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -214,7 +227,16 @@ export class Pago {
   }
 
   get estado(): string {
-    return this.props.status.toLowerCase();
+    if (this.props.status === 'CONFIRMADO') {
+      return 'confirmado';
+    }
+    if (this.props.status === 'RECHAZADO') {
+      return 'rechazado';
+    }
+    if (this.props.confirmedByAdmin) {
+      return 'confirmado_parcial';
+    }
+    return 'pendiente';
   }
 
   get comprobanteUrl(): string | null {
@@ -235,6 +257,10 @@ export class Pago {
 
   get confirmadoOrganizadorEn(): Date | null {
     return this.props.confirmadoOrganizadorEn ?? null;
+  }
+
+  get confirmadoReceptorEn(): Date | null {
+    return this.props.confirmadoReceptorEn ?? null;
   }
 
   get fechaPago(): Date {
@@ -308,9 +334,15 @@ export class Pago {
   }
 
   /**
-   * Alias de compatibilidad para confirmarPorAdmin.
+   * Alias de compatibilidad para confirmarPorAdmin ejecutado por el organizador.
    */
   public confirmarPorOrganizador(): void {
+    if (this.props.status === 'RECHAZADO') {
+      throw new PagoRechazadoError();
+    }
+    if (this.estaConfirmado()) {
+      throw new PagoYaConfirmadoError();
+    }
     if (this.props.confirmedByAdmin) {
       throw new ConfirmacionOrganizadorPreviaError();
     }
@@ -319,12 +351,22 @@ export class Pago {
 
   /**
    * Rechaza el pago por fondos no recibidos o comprobante inválido.
+   * Guarda el motivo del rechazo si se proporciona.
    */
-  public rechazar(): void {
+  public rechazar(motivo: string): void {
     if (this.estaConfirmado()) {
       throw new PagoYaConfirmadoError();
     }
+    if (this.props.status === 'RECHAZADO') {
+      throw new PagoYaRechazadoError();
+    }
+    const motivoNormalizado = motivo.trim();
+    if (!motivoNormalizado) {
+      throw new MotivoRechazoRequeridoError();
+    }
+
     this.props.status = 'RECHAZADO';
+    this.props.rejectionReason = motivoNormalizado;
     this.props.updatedAt = new Date();
   }
 

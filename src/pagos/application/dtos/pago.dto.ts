@@ -78,6 +78,20 @@ export const zRegistrarPago = z
 export type RegistrarPagoDto = z.infer<typeof zRegistrarPago>;
 
 // ─────────────────────────────────────────────
+// DTO de ENTRADA — Rechazar un Pago (AP-05)
+// ─────────────────────────────────────────────
+
+export const zRechazarPago = z.object({
+  motivo: z
+    .string({ required_error: 'El motivo de rechazo es obligatorio' })
+    .trim()
+    .min(5, { message: 'El motivo debe tener al menos 5 caracteres' })
+    .max(500, { message: 'El motivo no puede exceder 500 caracteres' }),
+});
+
+export type RechazarPagoDto = z.infer<typeof zRechazarPago>;
+
+// ─────────────────────────────────────────────
 // DTO de SALIDA — Respuesta de un Pago
 // ─────────────────────────────────────────────
 
@@ -94,6 +108,7 @@ export const zPagoResponse = z.object({
   ocrVerified: z.boolean(),
   ocrDetectedAmount: z.number().nullable(),
   evidenceUrl: z.string().url().nullable(),
+  rejectionReason: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

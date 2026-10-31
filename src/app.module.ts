@@ -3,6 +3,7 @@ import { DatabaseModule } from './database/database.module';
 import { PagoModule } from './pagos/pago.module';
 import { AuthModule } from './auth/auth.module';
 import { TandaModule } from './tandas/tanda.module';
+import { EntregaModule } from './entregas/entrega.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -18,6 +19,7 @@ import { AppService } from './app.service';
     AuthModule,
     PagoModule,
     TandaModule,
+    EntregaModule,
     // ParticipanteModule,
     // NotificacionModule,
   ],

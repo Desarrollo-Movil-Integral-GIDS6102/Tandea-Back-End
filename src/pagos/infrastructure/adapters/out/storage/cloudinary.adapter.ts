@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';
 import {
@@ -53,6 +53,14 @@ export class CloudinaryAdapter implements StoragePort {
   async subir(buffer: Buffer, opciones?: SubirArchivoOpciones): Promise<string> {
     if (!buffer || buffer.length === 0) {
       throw new Error('El buffer del comprobante no puede estar vacío');
+    }
+
+    // Sin credenciales Cloudinary falla con "Must supply api_key" y el cliente recibe un 500 genérico
+    const { cloud_name, api_key, api_secret } = cloudinary.config();
+    if (!cloud_name || !api_key || !api_secret) {
+      throw new ServiceUnavailableException(
+        'El servidor no tiene configurado el almacenamiento de fotos (CLOUDINARY_*)',
+      );
     }
 
     // Carpeta obligatoria por requerimiento: "comprobantes"

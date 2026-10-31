@@ -9,7 +9,12 @@ import {
   DomainError,
   PlanTandaInvalidoError,
 } from '../../../../../domain/errors/tanda.errors';
-import { NumeroYaTomadoError } from '../../../../../domain/errors/numero.errors';
+import {
+  NumeroInexistenteError,
+  NumeroYaTomadoError,
+  NumeroMuertoNoElegibleError,
+  NumeroFueraDeRangoError,
+} from '../../../../../domain/errors/numero.errors';
 
 /**
  * Filtro de Excepciones para Errores de Dominio de Tandas.
@@ -17,8 +22,9 @@ import { NumeroYaTomadoError } from '../../../../../domain/errors/numero.errors'
  * En Arquitectura Hexagonal:
  * - El Dominio lanza excepciones de negocio puras (subclases de DomainError).
  * - Este adaptador primario intercepta dichos errores y responde con el código HTTP correspondiente:
+ *   - NumeroInexistenteError → 404 Not Found
  *   - NumeroYaTomadoError → 409 Conflict
- *   - PlanTandaInvalidoError → 400 Bad Request
+ *   - NumeroMuertoNoElegibleError, NumeroFueraDeRangoError, PlanTandaInvalidoError → 400 Bad Request
  *   - Otros DomainError → 422 Unprocessable Entity
  */
 @Catch(DomainError)
@@ -30,10 +36,17 @@ export class TandaDomainExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.UNPROCESSABLE_ENTITY;
     let error = 'Unprocessable Entity';
 
-    if (exception instanceof NumeroYaTomadoError) {
+    if (exception instanceof NumeroInexistenteError) {
+      status = HttpStatus.NOT_FOUND;
+      error = 'Not Found';
+    } else if (exception instanceof NumeroYaTomadoError) {
       status = HttpStatus.CONFLICT;
       error = 'Conflict';
-    } else if (exception instanceof PlanTandaInvalidoError) {
+    } else if (
+      exception instanceof NumeroMuertoNoElegibleError ||
+      exception instanceof NumeroFueraDeRangoError ||
+      exception instanceof PlanTandaInvalidoError
+    ) {
       status = HttpStatus.BAD_REQUEST;
       error = 'Bad Request';
     }

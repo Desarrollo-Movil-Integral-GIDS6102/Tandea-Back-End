@@ -4,7 +4,13 @@ import {
   UnauthorizedException,
   ForbiddenException,
   ConflictException,
+  NotFoundException,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { randomInt } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import {
@@ -20,14 +26,24 @@ import {
   AUTH_USER_REPOSITORY_PORT,
   type AuthUserRepositoryPort,
 } from '../../domain/ports/out/auth-user-repository.port';
+import {
+  type PerfilUseCasePort,
+  type PerfilUsuario,
+  type ActualizarPerfilCommand,
+} from '../../domain/ports/in/perfil-use-case.port';
 import { AuthUserEntity } from '../../domain/entities/auth-user.entity';
+import { validatePassword } from '../../domain/policies/password-policy';
+
+const CODIGO_VIGENCIA_MIN = 10;
+const CODIGO_ESPERA_REENVIO_MS = 60_000;
+const CODIGO_MAX_INTENTOS = 5;
 import { MAIL_PORT, type MailPort } from '../../../common/ports/out/mail.port';
 import { EmailTemplates } from '../../../common/templates/mail/email-templates';
 
 
 
 @Injectable()
-export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
+export class AuthService implements LoginUseCasePort, RegisterUseCasePort, PerfilUseCasePort {
   constructor(
     @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: AuthUserRepositoryPort,
@@ -64,7 +80,7 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
 
   /**
    * Genera el token JWT firmado con { sub: user.idUser, email: user.email, role: user.role }
-   * Expiración: 1 día (configurado en JwtModule).
+   * Expiración: 30 días (configurado en JwtModule).
    */
   async login(user: AuthUserEntity): Promise<LoginResult> {
     const payload = {
@@ -146,6 +162,118 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort {
         age: newUser.age ?? null,
         gender: newUser.gender ?? null,
       },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PERFIL DEL USUARIO
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async obtenerPerfil(idUser: number): Promise<PerfilUsuario> {
+    const user = await this.userRepository.findById(idUser);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    return this.aPerfil(user);
+  }
+
+  async actualizarPerfil(idUser: number, command: ActualizarPerfilCommand): Promise<PerfilUsuario> {
+    const user = await this.userRepository.updateProfile(idUser, command);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    return this.aPerfil(user);
+  }
+
+  async solicitarCodigoPassword(idUser: number): Promise<void> {
+    const user = await this.userRepository.findById(idUser);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const vigente = await this.userRepository.findActivePasswordResetCode(idUser);
+    if (vigente && Date.now() - vigente.createdAt.getTime() < CODIGO_ESPERA_REENVIO_MS) {
+      throw new HttpException(
+        'Espera un minuto antes de pedir otro código',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const codigo = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    const expiresAt = new Date(Date.now() + CODIGO_VIGENCIA_MIN * 60_000);
+    await this.userRepository.createPasswordResetCode(
+      idUser,
+      await bcrypt.hash(codigo, 10),
+      expiresAt,
+    );
+
+    const template = EmailTemplates.passwordCode(user.name, codigo, CODIGO_VIGENCIA_MIN);
+    const enviado = await this.mailService.sendMail({
+      to: user.email,
+      subject: template.subject,
+      htmlContent: template.html,
+    });
+    if (!enviado) {
+      throw new ServiceUnavailableException('No pudimos enviar el correo. Intenta de nuevo.');
+    }
+  }
+
+  async cambiarPassword(idUser: number, codigo: string, nuevaPassword: string): Promise<void> {
+    const user = await this.userRepository.findById(idUser);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const registro = await this.userRepository.findActivePasswordResetCode(idUser);
+    if (!registro) {
+      throw new BadRequestException('El código expiró o no existe. Solicita uno nuevo.');
+    }
+    if (registro.attempts >= CODIGO_MAX_INTENTOS) {
+      throw new BadRequestException('Demasiados intentos. Solicita un código nuevo.');
+    }
+    if (!(await bcrypt.compare(codigo, registro.codeHash))) {
+      await this.userRepository.incrementPasswordResetAttempts(registro.idCode);
+      throw new BadRequestException('El código es incorrecto');
+    }
+
+    const errores = validatePassword(nuevaPassword, user);
+    if (errores.length > 0) {
+      throw new BadRequestException(errores.join('. '));
+    }
+    if (await bcrypt.compare(nuevaPassword, user.passwordHash)) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta a la actual');
+    }
+
+    await this.userRepository.updatePassword(idUser, await bcrypt.hash(nuevaPassword, 10));
+    await this.userRepository.markPasswordResetCodeUsed(registro.idCode);
+  }
+
+  async solicitarRecuperacion(email: string): Promise<void> {
+    const user = await this.userRepository.findByEmail(email);
+    if (!user || !user.active) {
+      return;
+    }
+    // Cualquier fallo se calla: responder distinto revelaría que el correo existe
+    await this.solicitarCodigoPassword(user.idUser).catch(() => undefined);
+  }
+
+  async restablecerPassword(email: string, codigo: string, nuevaPassword: string): Promise<void> {
+    const user = await this.userRepository.findByEmail(email);
+    if (!user || !user.active) {
+      throw new BadRequestException('El código expiró o no existe. Solicita uno nuevo.');
+    }
+    await this.cambiarPassword(user.idUser, codigo, nuevaPassword);
+  }
+
+  private aPerfil(user: AuthUserEntity): PerfilUsuario {
+    return {
+      idUser: user.idUser,
+      email: user.email,
+      name: user.name,
+      lastName: user.lastName,
+      age: user.age ?? null,
+      gender: user.gender ?? null,
+      role: user.role,
     };
   }
 }

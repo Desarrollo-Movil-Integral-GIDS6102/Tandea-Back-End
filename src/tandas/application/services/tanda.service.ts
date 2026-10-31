@@ -15,11 +15,20 @@ import {
   TandaDetalle,
   JoinTandaCommand,
   JoinTandaResult,
+  TandaConDisponibles,
+  SeguimientoTanda,
 } from '../../domain/ports/in/tanda-use-cases.port';
+import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
+import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
+import { sortearNumeros } from '../../domain/services/sortear-numeros';
+import { calcularPlan } from '../../domain/services/calcular-plan';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
 import { Tanda, TandaStatus } from '../../domain/entities/tanda.entity';
 import { InviteCodeGenerator } from '../../domain/utils/invite-code.generator';
+
+const numeroTomadoMensaje = (n: number): string =>
+  `El número #${n} ya fue tomado por otro participante. Elige otro.`;
 
 @Injectable()
 export class TandaService implements TandaUseCasesPort {
@@ -60,15 +69,29 @@ export class TandaService implements TandaUseCasesPort {
       throw new ConflictException('No se pudo generar un código único de tanda. Reintente.');
     }
 
-    // 3. Instanciar y persistir entidad
+    // 3. Instanciar y persistir entidad. El número muerto suma un turno por vuelta y
+    // recorre la fecha final un periodo más (una quincena, un día, etc.)
+    const periodicity = command.periodicity ?? 'quincenal';
+    const numRounds = command.numRounds ?? 1;
+    const { fechaFin } = calcularPlan({
+      periodicidad: periodicity,
+      montoCuota: command.contributionAmount,
+      numParticipantes: command.numParticipants,
+      numVueltas: numRounds,
+      tieneNumeroMuerto: command.hasDeadNumber ?? false,
+      fechaInicio: new Date(`${command.startDate}T12:00:00.000Z`),
+    });
+
     const tanda = new Tanda({
       name: command.name,
       description: command.description,
       startDate: command.startDate,
+      endDate: fechaFin.toISOString().slice(0, 10),
       contributionAmount: command.contributionAmount,
       numParticipants: command.numParticipants,
-      numRounds: command.numRounds ?? 1,
+      numRounds,
       graceDays: command.graceDays ?? 0,
+      periodicity,
       hasDeadNumber: command.hasDeadNumber ?? false,
       idTandaType: command.idTandaType ?? 1,
       idAdmin: command.idAdmin,
@@ -78,13 +101,12 @@ export class TandaService implements TandaUseCasesPort {
 
     const tandaCreada = await this.tandaRepository.create(tanda);
 
-    // 4. Si tiene número muerto, reservar un turno EXTRA en la vuelta 1
-    //    (participantes + 1, igual que calcularPlan); no ocupa lugar de nadie
+    // 4. Si tiene número muerto configurado, reservar el turno en la vuelta 1
     if (tandaCreada.hasDeadNumber && tandaCreada.idTanda) {
       await this.numberRepository.createNumber({
         idTanda: tandaCreada.idTanda,
         roundNumber: 1,
-        numberValue: tandaCreada.numParticipants + 1,
+        numberValue: NUMERO_MUERTO, // Siempre #0: los participantes usan #1..#N
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
@@ -124,16 +146,57 @@ export class TandaService implements TandaUseCasesPort {
       ...tanda.toPrimitives(),
       rolUsuario,
       participantes,
+      // Se toman de `participantes` porque ahí viene el estado de pago de cada número
+      misNumeros: participantes.filter((n) => n.idUser === userId),
+      numerosDisponibles: tanda.aceptaParticipantes ? await this.numerosLibres(tanda) : [],
     };
   }
 
-  async obtenerPorCodigoInvitacion(inviteCode: string): Promise<Tanda> {
+  async obtenerSeguimiento(idTanda: number, userId: number, role: string): Promise<SeguimientoTanda> {
+    const tanda = await this.tandaRepository.findById(idTanda);
+    if (!tanda || !tanda.active) {
+      throw new NotFoundException(`Tanda con id ${idTanda} no encontrada`);
+    }
+    if (tanda.idAdmin !== userId && role !== 'admin_global') {
+      throw new ForbiddenException('Solo el organizador puede ver el seguimiento de pagos');
+    }
+
+    const numeros = await this.numberRepository.findNumbersByTanda(idTanda);
+    return {
+      tanda: {
+        idTanda: tanda.idTanda,
+        name: tanda.name,
+        numRounds: tanda.numRounds,
+        contributionAmount: tanda.contributionAmount,
+      },
+      vueltaActual: 1,
+      cuota: tanda.contributionAmount,
+      // shortcut: el número muerto no paga y aquí se omite; la tarjeta SP-4-[FE-AJUSTE] lo agrega
+      participantes: numeros
+        .filter((n) => !n.isDeadNumber)
+        .map((n) => ({
+          idNumber: n.idNumber,
+          numberValue: n.numberValue,
+          nombre: [n.userName, n.userLastName].filter(Boolean).join(' '),
+          isDeadNumber: false,
+          idPayment: n.idPayment ?? null,
+          estadoPago: n.estadoPago ?? 'PENDIENTE',
+          montoPagado: n.montoPagado ?? 0,
+          fechaPago: n.fechaPago ?? null,
+        })),
+    };
+  }
+
+  async obtenerPorCodigoInvitacion(inviteCode: string): Promise<TandaConDisponibles> {
     const cleanCode = inviteCode.trim().toUpperCase();
     const tanda = await this.tandaRepository.findByInviteCode(cleanCode);
     if (!tanda || !tanda.active) {
       throw new NotFoundException(`No se encontró ninguna tanda activa con el código ${cleanCode}`);
     }
-    return tanda;
+    return {
+      ...tanda.toPrimitives(),
+      numerosDisponibles: tanda.aceptaParticipantes ? await this.numerosLibres(tanda) : [],
+    };
   }
 
   async listarTandas(query: ListTandasQuery, userId: number, role: string): Promise<PaginatedTandasResult> {
@@ -170,15 +233,19 @@ export class TandaService implements TandaUseCasesPort {
           rolUsuario = 'DUENO';
         }
 
-        // Turno del usuario en la vuelta 1 (para que el participante pueda pagar)
-        const turno = userNums.find((n) => n.roundNumber === 1) ?? userNums[0];
+        // Pendiente: tanda en curso con algún número sin pago (los del usuario; todos si es organizador)
+        const sinPago =
+          t.status === 'ACTIVA'
+            ? await this.numberRepository.countNumbersWithoutPayment(
+                t.idTanda!,
+                query.scope === 'dueno' ? undefined : userId,
+              )
+            : 0;
 
         return {
           ...t.toPrimitives(),
           rolUsuario,
-          miNumero: turno
-            ? { idNumber: turno.idNumber, numberValue: turno.numberValue, roundNumber: turno.roundNumber }
-            : null,
+          indicadorPago: sinPago > 0 ? ('pendiente' as const) : ('al_dia' as const),
         };
       }),
     );
@@ -238,6 +305,15 @@ export class TandaService implements TandaUseCasesPort {
       throw new ForbiddenException('Solo el organizador o administrador puede cambiar el estado de la tanda');
     }
 
+    if (status === 'ACTIVA' && tanda.status === 'PENDIENTE') {
+      const libres = await this.numerosLibres(tanda);
+      if (libres.length > 0) {
+        throw new BadRequestException(
+          `Faltan ${libres.length} números por apartar antes de iniciar la tanda`,
+        );
+      }
+    }
+
     tanda.updateStatus(status);
     return await this.tandaRepository.updateStatus(idTanda, status);
   }
@@ -265,72 +341,93 @@ export class TandaService implements TandaUseCasesPort {
       throw new NotFoundException(`No existe una tanda activa con el código ${cleanCode}`);
     }
 
-    if (tanda.status !== 'PENDIENTE') {
-      throw new BadRequestException('Solo es posible unirse a tandas en estado PENDIENTE');
+    // ACTIVA no bloquea: se puede unir mientras queden números libres
+    if (!tanda.aceptaParticipantes) {
+      throw new BadRequestException(
+        `La tanda está ${tanda.status.toLowerCase()} y ya no acepta participantes`,
+      );
     }
 
-    // Verificar si el usuario ya está unido
-    const yaRegistrado = await this.numberRepository.findByUserInTanda(tanda.idTanda!, command.idUser);
-    if (yaRegistrado.length > 0) {
-      throw new ConflictException('Ya estás registrado como participante en esta tanda');
+    const libres = await this.numerosLibres(tanda);
+    if (libres.length === 0) {
+      throw new BadRequestException('La tanda ya no tiene números disponibles');
     }
 
-    // Verificar si hay cupo disponible
-    const totalActual = await this.numberRepository.countParticipants(tanda.idTanda!);
-    if (totalActual >= tanda.numParticipants) {
-      throw new BadRequestException('La tanda ya ha completado el cupo máximo de participantes');
-    }
-
-    // Números ocupados en la vuelta 1
-    const ocupados = await this.numberRepository.findOccupiedNumbers(tanda.idTanda!, 1);
-
-    let numeroAsignado: number;
-
-    if (command.selectedNumber) {
-      if (command.selectedNumber < 1 || command.selectedNumber > tanda.numParticipants) {
+    // Un usuario (incluido el organizador) puede apartar uno o varios números
+    let pedidos: number[];
+    let consecutivos: boolean | undefined;
+    if (tanda.esSorteo) {
+      // Por sorteo el sistema asigna al azar entre los libres; el participante solo dice cuántos
+      if (command.selectedNumbers?.length) {
+        throw new BadRequestException('En una tanda por sorteo los números se asignan al azar');
+      }
+      const cantidad = command.cantidad ?? 1;
+      if (cantidad > libres.length) {
         throw new BadRequestException(
-          `El número seleccionado debe estar entre 1 y ${tanda.numParticipants}`,
+          `Solo quedan ${libres.length} números disponibles en la tanda`,
         );
       }
-      if (ocupados.includes(command.selectedNumber)) {
-        throw new ConflictException(`El turno número ${command.selectedNumber} ya está ocupado`);
-      }
-      numeroAsignado = command.selectedNumber;
+      ({ numeros: pedidos, consecutivos } = sortearNumeros(
+        libres,
+        cantidad,
+        command.consecutivos ?? false,
+      ));
     } else {
-      // Asignación automática: primer número libre
-      let candidato = 1;
-      while (candidato <= tanda.numParticipants) {
-        if (!ocupados.includes(candidato)) {
-          break;
+      // En Tradicional el participante elige; nunca se reasigna otro número
+      if (!command.selectedNumbers?.length) {
+        throw new BadRequestException('Elige al menos un número');
+      }
+      pedidos = [...new Set(command.selectedNumbers)];
+      for (const n of pedidos) {
+        if (n < 1 || n > tanda.numParticipants) {
+          throw new BadRequestException(
+            `El número seleccionado debe estar entre 1 y ${tanda.numParticipants}`,
+          );
         }
-        candidato++;
+        if (!libres.includes(n)) {
+          throw new ConflictException(numeroTomadoMensaje(n));
+        }
       }
-      if (candidato > tanda.numParticipants) {
-        throw new BadRequestException('No hay turnos disponibles para asignación automática');
-      }
-      numeroAsignado = candidato;
     }
 
-    // Registrar el número para la tanda
-    await this.numberRepository.createNumber({
-      idTanda: tanda.idTanda!,
-      roundNumber: 1,
-      numberValue: numeroAsignado,
-      idUser: command.idUser,
-      isDeadNumber: false,
-      status: 'PENDIENTE',
-    });
-
-    // Si con este usuario se llena la tanda, activar automáticamente
-    if (totalActual + 1 >= tanda.numParticipants) {
-      await this.tandaRepository.updateStatus(tanda.idTanda!, 'ACTIVA');
-      tanda.updateStatus('ACTIVA');
+    try {
+      await this.numberRepository.createNumbers(
+        pedidos.map((numberValue) => ({
+          idTanda: tanda.idTanda!,
+          roundNumber: 1,
+          numberValue,
+          idUser: command.idUser,
+          isDeadNumber: false,
+          status: 'PENDIENTE',
+        })),
+      );
+    } catch (error) {
+      if (error instanceof NumeroYaTomadoError) {
+        // El insert es una sola sentencia: no se apartó ninguno de los números pedidos
+        throw new ConflictException(
+          tanda.esSorteo
+            ? 'Otro participante tomó números al mismo tiempo. Intenta de nuevo.'
+            : numeroTomadoMensaje(error.numero),
+        );
+      }
+      throw error;
     }
 
+    // La tanda sigue PENDIENTE: el organizador la inicia cuando estén todos los números apartados
     return {
       tanda,
-      numeroAsignado,
+      numeroAsignado: pedidos[0],
+      numerosAsignados: pedidos,
+      consecutivos,
       isDeadNumber: false,
     };
+  }
+
+  /** Números de la vuelta 1 que nadie ha apartado (el número muerto queda fuera del rango). */
+  private async numerosLibres(tanda: Tanda): Promise<number[]> {
+    const ocupados = await this.numberRepository.findOccupiedNumbers(tanda.idTanda!, 1);
+    return Array.from({ length: tanda.numParticipants }, (_, i) => i + 1).filter(
+      (n) => !ocupados.includes(n),
+    );
   }
 }

@@ -72,8 +72,9 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         idUser: numberTable.idUser,
         roundNumber: numberTable.roundNumber,
         idTanda: tandaTable.idTanda,
-        idAdmin: tandaTable.idAdmin,
         contributionAmount: tandaTable.contributionAmount,
+        idAdmin: tandaTable.idAdmin,
+        status: tandaTable.status,
       })
       .from(numberTable)
       .leftJoin(
@@ -95,11 +96,12 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
       idUser: row.idUser,
       roundNumber: row.roundNumber,
       tanda:
-        row.idTanda != null && row.idAdmin != null && row.contributionAmount != null
+        row.idTanda != null && row.contributionAmount != null
           ? {
               idTanda: row.idTanda,
-              idAdmin: row.idAdmin,
               contributionAmount: parseFloat(row.contributionAmount),
+              idAdmin: row.idAdmin ?? undefined,
+              status: row.status ?? 'PENDIENTE',
             }
           : null,
     };
@@ -137,8 +139,9 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         status: data.status,
         confirmedByParticipant: data.confirmedByParticipant,
         confirmedByAdmin: data.confirmedByAdmin,
+        rejectionReason: data.rejectionReason,
         ocrDetectedAmount: data.ocrDetectedAmount,
-        ocrVerified: data.ocrVerified,
+        ocrVerified: data.ocrVerified
       })
       .where(eq(paymentTable.idPayment, data.idPayment!))
       .returning();

@@ -18,10 +18,18 @@ import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import {
   tandaTable,
   numberTable,
+  paymentTable,
+  payoutTable,
   userTable,
 } from '../../../../../database/tandea.schema';
 import { Tanda, TandaStatus } from '../../../../domain/entities/tanda.entity';
-import { NumeroYaTomadoError } from '../../../../domain/errors/numero.errors';
+import { NumeroTanda } from '../../../../domain/entities/numero-tanda.entity';
+import { NumeroMapper } from './mappers/numero.mapper';
+import {
+  NumeroYaTomadoError,
+  NumeroMuertoNoElegibleError,
+  NumeroInexistenteError,
+} from '../../../../domain/errors/numero.errors';
 import {
   TandaRepositoryPort,
   TandaFilterOptions,
@@ -57,6 +65,7 @@ export class DrizzleTandaRepository
         numParticipants: tanda.numParticipants,
         numRounds: tanda.numRounds,
         graceDays: tanda.graceDays,
+        periodicity: tanda.periodicity,
         hasDeadNumber: tanda.hasDeadNumber,
         idTandaType: tanda.idTandaType,
         idAdmin: tanda.idAdmin,
@@ -247,27 +256,17 @@ export class DrizzleTandaRepository
   // =========================================================================
 
   async createNumber(data: CreateNumberData): Promise<NumberRecord> {
-    let row: typeof numberTable.$inferSelect;
-    try {
-      [row] = await this.db
-        .insert(numberTable)
-        .values({
-          idTanda: data.idTanda,
-          roundNumber: data.roundNumber,
-          numberValue: data.numberValue,
-          idUser: data.idUser,
-          isDeadNumber: data.isDeadNumber,
-          status: data.status as any,
-        })
-        .returning();
-    } catch (error: any) {
-      // Dos personas eligieron el mismo turno a la vez: el índice único deja pasar solo a una (AP-02)
-      const code = error?.code || error?.cause?.code;
-      if (code === '23505') {
-        throw new NumeroYaTomadoError(data.numberValue, data.roundNumber);
-      }
-      throw error;
-    }
+    const [row] = await this.db
+      .insert(numberTable)
+      .values({
+        idTanda: data.idTanda,
+        roundNumber: data.roundNumber,
+        numberValue: data.numberValue,
+        idUser: data.idUser,
+        isDeadNumber: data.isDeadNumber,
+        status: data.status as any,
+      })
+      .returning();
 
     return {
       idNumber: row.idNumber,
@@ -278,6 +277,33 @@ export class DrizzleTandaRepository
       isDeadNumber: row.isDeadNumber,
       status: row.status,
     };
+  }
+
+  async createNumbers(data: CreateNumberData[]): Promise<void> {
+    try {
+      await this.db.insert(numberTable).values(
+        data.map((d) => ({
+          idTanda: d.idTanda,
+          roundNumber: d.roundNumber,
+          numberValue: d.numberValue,
+          idUser: d.idUser,
+          isDeadNumber: d.isDeadNumber,
+          status: d.status as any,
+        })),
+      );
+    } catch (error: any) {
+      // Otro usuario apartó alguno de los números entre la consulta y el insert
+      const code = error?.code || error?.cause?.code;
+      if (code === '23505') {
+        // detail: Key (id_tanda, round_number, number_value)=(7, 1, 3) already exists.
+        const detail: string = error?.detail ?? error?.cause?.detail ?? '';
+        const tomado = /=\(\d+, (\d+), (\d+)\)/.exec(detail);
+        throw tomado
+          ? new NumeroYaTomadoError(Number(tomado[2]), Number(tomado[1]))
+          : new NumeroYaTomadoError(data[0].numberValue, data[0].roundNumber);
+      }
+      throw error;
+    }
   }
 
   async findOccupiedNumbers(
@@ -340,6 +366,30 @@ export class DrizzleTandaRepository
     return Number(res?.total || 0);
   }
 
+  async countNumbersWithoutPayment(idTanda: number, idUser?: number): Promise<number> {
+    const [res] = await this.db
+      .select({ total: count() })
+      .from(numberTable)
+      .leftJoin(
+        paymentTable,
+        and(
+          eq(paymentTable.idNumber, numberTable.idNumber),
+          inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+        ),
+      )
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.isDeadNumber, false),
+          isNull(numberTable.deletedAt),
+          isNull(paymentTable.idPayment),
+          idUser !== undefined ? eq(numberTable.idUser, idUser) : undefined,
+        ),
+      );
+
+    return Number(res?.total ?? 0);
+  }
+
   async findNumbersByTanda(idTanda: number): Promise<NumberRecord[]> {
     const rows = await this.db
       .select({
@@ -351,10 +401,30 @@ export class DrizzleTandaRepository
         isDeadNumber: numberTable.isDeadNumber,
         status: numberTable.status,
         userName: userTable.name,
+        userLastName: userTable.lastName,
         userEmail: userTable.email,
+        idPayment: paymentTable.idPayment,
+        estadoPago: paymentTable.status,
+        montoPagado: paymentTable.totalAmount,
+        fechaPago: paymentTable.createdAt,
+        idPayout: payoutTable.idPayout,
       })
       .from(numberTable)
       .leftJoin(userTable, eq(numberTable.idUser, userTable.idUser))
+      .leftJoin(
+        paymentTable,
+        and(
+          eq(paymentTable.idNumber, numberTable.idNumber),
+          inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+        ),
+      )
+      .leftJoin(
+        payoutTable,
+        and(
+          eq(payoutTable.idNumber, numberTable.idNumber),
+          inArray(payoutTable.status, ['PENDIENTE', 'CONFIRMADO']),
+        ),
+      )
       .where(
         and(
           eq(numberTable.idTanda, idTanda),
@@ -372,9 +442,112 @@ export class DrizzleTandaRepository
       isDeadNumber: r.isDeadNumber,
       status: r.status,
       userName: r.userName,
+      userLastName: r.userLastName,
       userEmail: r.userEmail,
+      idPayment: r.idPayment,
+      estadoPago: r.estadoPago,
+      montoPagado: r.montoPagado === null ? null : Number(r.montoPagado),
+      fechaPago: r.fechaPago,
+      idPayout: r.idPayout,
     }));
   }
+
+
+  async asignarSiLibre(
+    idTanda: number,
+    roundNumber: number,
+    numberValue: number,
+    idUsuario: number,
+  ): Promise<NumeroTanda> {
+    try {
+      return await this.db.transaction(async (tx) => {
+        // 1. UPDATE atómico a nivel de base de datos dentro de una transacción:
+        // Solo actualiza si id_user es NULL, no es número muerto y no está borrado.
+        const updatedRows = await tx
+          .update(numberTable)
+          .set({
+            idUser: idUsuario,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(numberTable.idTanda, idTanda),
+              eq(numberTable.roundNumber, roundNumber),
+              eq(numberTable.numberValue, numberValue),
+              isNull(numberTable.idUser),
+              eq(numberTable.isDeadNumber, false),
+              isNull(numberTable.deletedAt),
+            ),
+          )
+          .returning();
+
+        if (updatedRows.length > 0) {
+          return NumeroMapper.toDomain(updatedRows[0]);
+        }
+
+        // 2. Si no actualizó ninguna fila, distinguir la causa exacta consultando la fila
+        const [existing] = await tx
+          .select()
+          .from(numberTable)
+          .where(
+            and(
+              eq(numberTable.idTanda, idTanda),
+              eq(numberTable.roundNumber, roundNumber),
+              eq(numberTable.numberValue, numberValue),
+              isNull(numberTable.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          throw new NumeroInexistenteError(numberValue, idTanda);
+        }
+
+        if (existing.isDeadNumber) {
+          throw new NumeroMuertoNoElegibleError(numberValue);
+        }
+
+        if (existing.idUser !== null) {
+          throw new NumeroYaTomadoError(numberValue, roundNumber);
+        }
+
+        throw new NumeroYaTomadoError(numberValue, roundNumber);
+      });
+    } catch (error: any) {
+      // En Drizzle 0.44 el error de PostgreSQL puede venir en error.code o error.cause.code
+      const code = error?.code || error?.cause?.code;
+      if (code === '23505') {
+        throw new NumeroYaTomadoError(numberValue, roundNumber);
+      }
+      throw error;
+    }
+  }
+
+  async findByTandaRoundAndValue(
+    idTanda: number,
+    roundNumber: number,
+    numberValue: number,
+  ): Promise<NumeroTanda | null> {
+    const [row] = await this.db
+      .select()
+      .from(numberTable)
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.roundNumber, roundNumber),
+          eq(numberTable.numberValue, numberValue),
+          isNull(numberTable.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!row) {
+      return null;
+    }
+
+    return NumeroMapper.toDomain(row);
+  }
+
 
   // =========================================================================
   // HELPER MAPPER
@@ -391,6 +564,7 @@ export class DrizzleTandaRepository
       numParticipants: row.numParticipants,
       numRounds: row.numRounds,
       graceDays: row.graceDays,
+      periodicity: row.periodicity,
       hasDeadNumber: row.hasDeadNumber,
       idTandaType: row.idTandaType,
       idAdmin: row.idAdmin,

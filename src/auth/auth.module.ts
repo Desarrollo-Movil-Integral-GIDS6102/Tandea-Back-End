@@ -10,6 +10,7 @@ import { AuthController } from './infrastructure/adapters/in/http/controllers/au
 import { AuthService } from './application/services/auth.service';
 import { LOGIN_USE_CASE_PORT } from './domain/ports/in/login-use-case.port';
 import { REGISTER_USE_CASE_PORT } from './domain/ports/in/register-use-case.port';
+import { PERFIL_USE_CASE_PORT } from './domain/ports/in/perfil-use-case.port';
 import { AUTH_USER_REPOSITORY_PORT } from './domain/ports/out/auth-user-repository.port';
 
 // Repositories (Drizzle)
@@ -31,7 +32,7 @@ import { BrevoMailAdapter } from '../common/infrastructure/adapters/out/mail/bre
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'tandea_secret_key_sprint1',
-      signOptions: { expiresIn: '1d' },
+      signOptions: { expiresIn: '30d' },
     }),
   ],
   controllers: [AuthController],
@@ -48,6 +49,10 @@ import { BrevoMailAdapter } from '../common/infrastructure/adapters/out/mail/bre
     {
       provide: REGISTER_USE_CASE_PORT,
       useClass: AuthService,
+    },
+    {
+      provide: PERFIL_USE_CASE_PORT,
+      useExisting: AuthService,
     },
      {
       provide: MAIL_PORT,

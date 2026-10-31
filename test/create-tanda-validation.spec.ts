@@ -51,6 +51,8 @@ describe('[BE-TANDA] Validación mínima de participantes (QA-03)', () => {
 
   const mockNumberRepo: NumberRepositoryPort = {
     createNumber: mockCreateNumber,
+    createNumbers: vi.fn(),
+    countNumbersWithoutPayment: vi.fn().mockResolvedValue(0),
     findOccupiedNumbers: mockFindOccupiedNumbers,
     findByUserInTanda: mockFindByUserInTanda,
     countParticipants: mockCountParticipants,

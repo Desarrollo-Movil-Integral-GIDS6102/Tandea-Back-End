@@ -76,7 +76,10 @@ export class TandaController {
     const result = await this.tandaService.unirseTanda({
       inviteCode: dto.inviteCode,
       idUser: user.idUser,
-      selectedNumber: dto.selectedNumber,
+      selectedNumbers:
+        dto.selectedNumbers ?? (dto.selectedNumber ? [dto.selectedNumber] : undefined),
+      cantidad: dto.cantidad,
+      consecutivos: dto.consecutivos,
     });
 
     return {
@@ -85,6 +88,8 @@ export class TandaController {
       data: {
         tanda: result.tanda.toPrimitives(),
         numeroAsignado: result.numeroAsignado,
+        numerosAsignados: result.numerosAsignados,
+        consecutivos: result.consecutivos,
         isDeadNumber: result.isDeadNumber,
       },
     };
@@ -149,7 +154,7 @@ export class TandaController {
     const tanda = await this.tandaService.obtenerPorCodigoInvitacion(inviteCode);
     return {
       statusCode: HttpStatus.OK,
-      data: tanda.toPrimitives(),
+      data: tanda,
     };
   }
 
@@ -171,6 +176,21 @@ export class TandaController {
     return {
       statusCode: HttpStatus.OK,
       data: tandaDetalle,
+    };
+  }
+
+  /**
+   * GET /tandas/:id/seguimiento
+   * Quién pagó y quién no (solo organizador o admin global).
+   */
+  @Get(':id/seguimiento')
+  async obtenerSeguimiento(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.tandaService.obtenerSeguimiento(id, user.idUser, user.role),
     };
   }
 

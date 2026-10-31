@@ -25,6 +25,12 @@ describe('[BE-AUTH] Servicio de Autenticación y Login', () => {
       findById: vi.fn(),
       findRoleByName: vi.fn(),
       createUser: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePassword: vi.fn(),
+      createPasswordResetCode: vi.fn(),
+      findActivePasswordResetCode: vi.fn(),
+      incrementPasswordResetAttempts: vi.fn(),
+      markPasswordResetCodeUsed: vi.fn(),
     };
 
     mockJwtService = {
@@ -229,7 +235,7 @@ describe('[BE-AUTH] AuthController - Registro', () => {
     mockRegisterPort = {
       register: vi.fn(),
     };
-    authController = new AuthController(mockLoginPort, mockRegisterPort);
+    authController = new AuthController(mockLoginPort, mockRegisterPort, {} as any);
   });
 
   it('debe registrar usuario con DTO válido a través de POST /register', async () => {

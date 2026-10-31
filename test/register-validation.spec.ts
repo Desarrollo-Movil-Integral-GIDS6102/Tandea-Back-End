@@ -60,11 +60,17 @@ describe('[SP-2-Bug] Registro - Validaciones de entrada', () => {
         .mockResolvedValue(
           new AuthUserEntity(1, 'nuevo@ejemplo.com', 'hash', 'Juan', 'Pérez', 1, 'usuario', true, 28, 'M'),
         ),
+      updateProfile: vi.fn(),
+      updatePassword: vi.fn(),
+      createPasswordResetCode: vi.fn(),
+      findActivePasswordResetCode: vi.fn(),
+      incrementPasswordResetAttempts: vi.fn(),
+      markPasswordResetCodeUsed: vi.fn(),
     };
     jwt = { sign: vi.fn().mockReturnValue('mock.jwt.token') };
     const mail: any = { sendMail: vi.fn().mockResolvedValue(true) };
     const service = new AuthService(repo, mail, jwt as any);
-    controller = new AuthController(service, service);
+    controller = new AuthController(service, service, service);
   });
 
   it('registra exitosamente con datos válidos y no expone contraseña ni hash', async () => {

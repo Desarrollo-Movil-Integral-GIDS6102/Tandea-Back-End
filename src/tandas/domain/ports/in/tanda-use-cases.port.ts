@@ -1,5 +1,6 @@
 // src/tandas/domain/ports/in/tanda-use-cases.port.ts
 import { Tanda, TandaStatus, TandaProps } from '../../entities/tanda.entity';
+import type { PeriodicidadTanda } from '../../services/calcular-plan';
 import { NumberRecord } from '../out/number-repository.port';
 
 export interface CreateTandaCommand {
@@ -10,6 +11,7 @@ export interface CreateTandaCommand {
   numParticipants: number;
   numRounds?: number;
   graceDays?: number;
+  periodicity?: PeriodicidadTanda;
   hasDeadNumber?: boolean;
   idTandaType?: number;
   idAdmin: number;
@@ -36,8 +38,7 @@ export interface ListTandasQuery {
 export interface PaginatedTandasResult {
   data: (TandaProps & {
     rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL';
-    /** Turno del usuario autenticado en esta tanda, o null si no participa. */
-    miNumero?: { idNumber: number; numberValue: number; roundNumber: number } | null;
+    indicadorPago: 'al_dia' | 'pendiente';
   })[];
   total: number;
   page: number;
@@ -48,24 +49,54 @@ export interface PaginatedTandasResult {
 export interface TandaDetalle extends TandaProps {
   rolUsuario?: 'DUENO' | 'PARTICIPANTE' | 'AMBOS' | 'ADMIN_GLOBAL';
   participantes?: NumberRecord[];
+  misNumeros?: NumberRecord[];
+  numerosDisponibles?: number[];
+}
+
+export type TandaConDisponibles = TandaProps & { numerosDisponibles: number[] };
+
+export interface SeguimientoParticipante {
+  idNumber: number;
+  numberValue: number;
+  nombre: string;
+  isDeadNumber: boolean;
+  idPayment: number | null;
+  estadoPago: string;
+  montoPagado: number;
+  fechaPago: Date | null;
+}
+
+export interface SeguimientoTanda {
+  tanda: Pick<TandaProps, 'idTanda' | 'name' | 'numRounds' | 'contributionAmount'>;
+  vueltaActual: number;
+  cuota: number;
+  participantes: SeguimientoParticipante[];
 }
 
 export interface JoinTandaCommand {
   inviteCode: string;
   idUser: number;
-  selectedNumber?: number;
+  /** Números elegidos; si se omite se asignan los primeros `cantidad` libres. */
+  selectedNumbers?: number[];
+  cantidad?: number;
+  /** Solo sorteo: pedir un bloque de números seguidos. */
+  consecutivos?: boolean;
 }
 
 export interface JoinTandaResult {
   tanda: Tanda;
   numeroAsignado: number;
+  numerosAsignados: number[];
+  /** Solo sorteo: si los números asignados forman un bloque seguido. */
+  consecutivos?: boolean;
   isDeadNumber: boolean;
 }
 
 export interface TandaUseCasesPort {
   crearTanda(command: CreateTandaCommand): Promise<Tanda>;
   obtenerTandaPorId(idTanda: number, userId: number, role: string): Promise<TandaDetalle>;
-  obtenerPorCodigoInvitacion(inviteCode: string): Promise<Tanda>;
+  obtenerSeguimiento(idTanda: number, userId: number, role: string): Promise<SeguimientoTanda>;
+  obtenerPorCodigoInvitacion(inviteCode: string): Promise<TandaConDisponibles>;
   listarTandas(query: ListTandasQuery, userId: number, role: string): Promise<PaginatedTandasResult>;
   actualizarTanda(idTanda: number, command: UpdateTandaCommand, userId: number, role: string): Promise<Tanda>;
   cambiarEstadoTanda(idTanda: number, status: TandaStatus, userId: number, role: string): Promise<Tanda>;

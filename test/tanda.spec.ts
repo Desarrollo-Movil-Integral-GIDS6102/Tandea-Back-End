@@ -3,6 +3,7 @@ import { TandaService } from '../src/tandas/application/services/tanda.service';
 import { TandaRepositoryPort } from '../src/tandas/domain/ports/out/tanda-repository.port';
 import { NumberRepositoryPort } from '../src/tandas/domain/ports/out/number-repository.port';
 import { Tanda } from '../src/tandas/domain/entities/tanda.entity';
+import { NumeroYaTomadoError } from '../src/tandas/domain/errors/numero.errors';
 import {
   BadRequestException,
   ConflictException,
@@ -44,7 +45,9 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
 
     mockNumberRepo = {
       createNumber: vi.fn(),
-      findOccupiedNumbers: vi.fn(),
+      createNumbers: vi.fn(),
+      countNumbersWithoutPayment: vi.fn().mockResolvedValue(0),
+      findOccupiedNumbers: vi.fn().mockResolvedValue([]),
       findByUserInTanda: vi.fn(),
       countParticipants: vi.fn(),
       findNumbersByTanda: vi.fn(),
@@ -93,25 +96,27 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(mockNumberRepo.createNumber).toHaveBeenCalledWith({
         idTanda: 1,
         roundNumber: 1,
-        numberValue: 6, // turno extra: 5 participantes + número muerto
+        numberValue: 0,
         idUser: null,
         isDeadNumber: true,
         status: 'PENDIENTE',
       });
     });
 
-    it('con número muerto, el último participante real todavía encuentra lugar', async () => {
-      const tanda = new Tanda({ ...mockTandaData, hasDeadNumber: true });
-      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      // 4 participantes reales; el número muerto (6) no cuenta para el cupo
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(4);
-      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 6]);
+    it('sin número muerto no crea el #0', async () => {
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(null);
+      vi.spyOn(mockTandaRepo, 'create').mockResolvedValue(new Tanda(mockTandaData));
 
-      const result = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 50 });
+      await service.crearTanda({
+        name: 'Tanda sin respaldo',
+        startDate: '2026-11-01',
+        contributionAmount: 1000,
+        numParticipants: 5,
+        hasDeadNumber: false,
+        idAdmin: 10,
+      });
 
-      expect(result.numeroAsignado).toBe(5);
-      expect(mockTandaRepo.updateStatus).toHaveBeenCalledWith(1, 'ACTIVA');
+      expect(mockNumberRepo.createNumber).not.toHaveBeenCalled();
     });
 
     it('debe permitir crear una tanda con el mínimo válido de 3 participantes', async () => {
@@ -224,28 +229,6 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       expect(res.data[0].rolUsuario).toBe('DUENO');
       expect(res.totalPages).toBe(1);
     });
-
-    it('incluye el turno del participante (miNumero) para poder pagar', async () => {
-      vi.spyOn(mockTandaRepo, 'findAll').mockResolvedValue({
-        data: [new Tanda(mockTandaData)],
-        total: 1,
-      });
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([
-        {
-          idNumber: 101,
-          idTanda: 1,
-          roundNumber: 1,
-          numberValue: 3,
-          idUser: 25,
-          isDeadNumber: false,
-          status: 'PENDIENTE',
-        },
-      ]);
-
-      const res = await service.listarTandas({ page: 1, limit: 10, scope: 'participante' }, 25, 'usuario');
-
-      expect(res.data[0].miNumero).toEqual({ idNumber: 101, numberValue: 3, roundNumber: 1 });
-    });
   });
 
   describe('Actualizar Tanda (Update)', () => {
@@ -278,6 +261,7 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tanda);
       vi.spyOn(mockTandaRepo, 'updateStatus').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 5]);
 
       await service.cambiarEstadoTanda(1, 'ACTIVA', 10, 'usuario');
 
@@ -306,60 +290,268 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
     });
   });
 
+  describe('Plan y seguimiento', () => {
+    const crear = async (periodicity: 'diaria' | 'quincenal', hasDeadNumber: boolean) => {
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(null);
+      vi.spyOn(mockTandaRepo, 'create').mockImplementation(async (t) => t);
+      return service.crearTanda({
+        name: 'Tanda plan',
+        startDate: '2026-11-01',
+        contributionAmount: 100,
+        numParticipants: 3,
+        periodicity,
+        hasDeadNumber,
+        idAdmin: 10,
+      });
+    };
+
+    it('sin número muerto la tanda termina en el turno N', async () => {
+      expect((await crear('quincenal', false)).endDate).toBe('2026-12-01');
+    });
+
+    it('el número muerto agrega una quincena más', async () => {
+      const tanda = await crear('quincenal', true);
+
+      expect(tanda.endDate).toBe('2026-12-16');
+      expect(tanda.periodicity).toBe('quincenal');
+    });
+
+    it('en una tanda diaria el número muerto agrega un día más', async () => {
+      expect((await crear('diaria', true)).endDate).toBe('2026-11-04');
+    });
+
+    const numeros = [
+      { idNumber: 1, idTanda: 1, roundNumber: 1, numberValue: 0, idUser: null, isDeadNumber: true, status: 'PENDIENTE' },
+      {
+        idNumber: 2, idTanda: 1, roundNumber: 1, numberValue: 1, idUser: 30, isDeadNumber: false, status: 'PENDIENTE',
+        userName: 'Ana', userLastName: 'López', idPayment: 9, estadoPago: 'CONFIRMADO', montoPagado: 1000,
+      },
+      { idNumber: 3, idTanda: 1, roundNumber: 1, numberValue: 2, idUser: 31, isDeadNumber: false, status: 'PENDIENTE', userName: 'Luis' },
+    ];
+
+    it('el organizador ve quién pagó y quién no, sin el número muerto', async () => {
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(new Tanda(mockTandaData));
+      vi.spyOn(mockNumberRepo, 'findNumbersByTanda').mockResolvedValue(numeros);
+
+      const res = await service.obtenerSeguimiento(1, 10, 'usuario');
+
+      expect(res.participantes.map((p) => [p.numberValue, p.nombre, p.estadoPago, p.idPayment])).toEqual([
+        [1, 'Ana López', 'CONFIRMADO', 9],
+        [2, 'Luis', 'PENDIENTE', null],
+      ]);
+    });
+
+    it('un participante no puede ver el seguimiento', async () => {
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(new Tanda(mockTandaData));
+
+      await expect(service.obtenerSeguimiento(1, 30, 'usuario')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('el detalle entrega el estado de pago de mis números', async () => {
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(new Tanda(mockTandaData));
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([numeros[1]]);
+      vi.spyOn(mockNumberRepo, 'findNumbersByTanda').mockResolvedValue(numeros);
+
+      const detalle = await service.obtenerTandaPorId(1, 30, 'usuario');
+
+      expect(detalle.misNumeros).toEqual([expect.objectContaining({ numberValue: 1, estadoPago: 'CONFIRMADO' })]);
+    });
+  });
+
+  describe('Iniciar Tanda', () => {
+    it('debe rechazar iniciar la tanda si faltan números por apartar', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2]);
+
+      await expect(service.cambiarEstadoTanda(1, 'ACTIVA', 10, 'usuario')).rejects.toThrow(
+        'Faltan 3 números',
+      );
+      expect(mockTandaRepo.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Unirse a Tanda (Join)', () => {
     it('debe permitir unirse a una tanda asignando el número seleccionado', async () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(1);
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
-      vi.spyOn(mockNumberRepo, 'createNumber').mockResolvedValue({} as any);
 
       const res = await service.unirseTanda({
         inviteCode: 'TND-TEST01',
         idUser: 30,
-        selectedNumber: 3,
+        selectedNumbers: [3],
       });
 
       expect(res.numeroAsignado).toBe(3);
-      expect(mockNumberRepo.createNumber).toHaveBeenCalledWith(
-        expect.objectContaining({
-          numberValue: 3,
-          idUser: 30,
-        }),
-      );
+      expect(mockNumberRepo.createNumbers).toHaveBeenCalledWith([
+        expect.objectContaining({ numberValue: 3, idUser: 30 }),
+      ]);
+    });
+
+    it('debe permitir apartar varios números al mismo usuario aunque ya esté en la tanda', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
+
+      const res = await service.unirseTanda({
+        inviteCode: 'TND-TEST01',
+        idUser: 10,
+        selectedNumbers: [2, 4, 4],
+      });
+
+      expect(res.numerosAsignados).toEqual([2, 4]);
+      expect(mockNumberRepo.createNumbers).toHaveBeenCalledOnce();
     });
 
     it('debe rechazar si el turno seleccionado ya está tomado', async () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(2);
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2]);
 
       await expect(
         service.unirseTanda({
           inviteCode: 'TND-TEST01',
           idUser: 30,
-          selectedNumber: 2,
+          selectedNumbers: [2],
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow('El número #2 ya fue tomado por otro participante. Elige otro.');
+      expect(mockNumberRepo.createNumbers).not.toHaveBeenCalled();
     });
 
-    it('debe asignar automáticamente el primer número libre si no se especifica', async () => {
+    it('en Tradicional exige elegir números y nunca asigna otro', async () => {
       const tanda = new Tanda(mockTandaData);
       vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
-      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
-      vi.spyOn(mockNumberRepo, 'countParticipants').mockResolvedValue(1);
       vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1]);
-      vi.spyOn(mockNumberRepo, 'createNumber').mockResolvedValue({} as any);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, cantidad: 1 }),
+      ).rejects.toThrow('Elige al menos un número');
+      expect(mockNumberRepo.createNumbers).not.toHaveBeenCalled();
+    });
+
+    it('si otro participante toma un número a la vez, rechaza todo y nombra el número', async () => {
+      const tanda = new Tanda(mockTandaData);
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([]);
+      vi.spyOn(mockNumberRepo, 'createNumbers').mockRejectedValue(new NumeroYaTomadoError(4));
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [3, 4] }),
+      ).rejects.toThrow('El número #4 ya fue tomado por otro participante. Elige otro.');
+    });
+
+    it('por sorteo asigna al azar la cantidad pedida entre los libres, nunca el #0', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2, hasDeadNumber: true });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([0, 1, 3]);
+
+      const res = await service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, cantidad: 2 });
+
+      expect(res.numerosAsignados).toHaveLength(2);
+      expect(res.numerosAsignados.every((n) => [2, 4, 5].includes(n))).toBe(true);
+      expect(mockNumberRepo.createNumbers).toHaveBeenCalledOnce();
+    });
+
+    it('por sorteo con consecutivos entrega el bloque libre', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      // Libres: 3, 4, 5 → único bloque de 3
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2]);
 
       const res = await service.unirseTanda({
         inviteCode: 'TND-TEST01',
         idUser: 30,
+        cantidad: 3,
+        consecutivos: true,
       });
 
-      expect(res.numeroAsignado).toBe(2);
+      expect(res.numerosAsignados).toEqual([3, 4, 5]);
+      expect(res.consecutivos).toBe(true);
+    });
+
+    it('por sorteo rechaza sin asignar nada si no alcanzan los libres', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3]);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, cantidad: 3 }),
+      ).rejects.toThrow('Solo quedan 2 números disponibles en la tanda');
+      expect(mockNumberRepo.createNumbers).not.toHaveBeenCalled();
+    });
+
+    it('por sorteo no deja elegir números', async () => {
+      const tanda = new Tanda({ ...mockTandaData, idTandaType: 2 });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [2] }),
+      ).rejects.toThrow('En una tanda por sorteo los números se asignan al azar');
+    });
+
+    it('el número muerto no ocupa lugar: una tanda de 3 admite 3 números de personas', async () => {
+      const tanda = new Tanda({ ...mockTandaData, numParticipants: 3, hasDeadNumber: true });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      // #1 y #2 apartados, #0 es el número muerto
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([0, 1, 2]);
+
+      const res = await service.unirseTanda({
+        inviteCode: 'TND-TEST01',
+        idUser: 30,
+        selectedNumbers: [3],
+      });
+
+      expect(res.numeroAsignado).toBe(3);
+      expect(mockTandaRepo.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('permite unirse a una tanda ACTIVA mientras queden números libres', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 5]);
+
+      const res = await service.unirseTanda({
+        inviteCode: 'TND-TEST01',
+        idUser: 30,
+        selectedNumbers: [4],
+      });
+
+      expect(res.numerosAsignados).toEqual([4]);
+    });
+
+    it('rechaza con "sin números disponibles" solo cuando no queda ninguno', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 4, 5]);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [4] }),
+      ).rejects.toThrow('La tanda ya no tiene números disponibles');
+    });
+
+    it('rechaza una tanda finalizada con un mensaje propio', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'FINALIZADA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+
+      await expect(
+        service.unirseTanda({ inviteCode: 'TND-TEST01', idUser: 30, selectedNumbers: [4] }),
+      ).rejects.toThrow('La tanda está finalizada y ya no acepta participantes');
+    });
+
+    it('el detalle y el código devuelven los mismos números libres en una tanda ACTIVA', async () => {
+      const tanda = new Tanda({ ...mockTandaData, status: 'ACTIVA' });
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(tanda);
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(tanda);
+      vi.spyOn(mockNumberRepo, 'findOccupiedNumbers').mockResolvedValue([1, 2, 3, 5]);
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([]);
+      vi.spyOn(mockNumberRepo, 'findNumbersByTanda').mockResolvedValue([]);
+
+      const porCodigo = await service.obtenerPorCodigoInvitacion('TND-TEST01');
+      const detalle = await service.obtenerTandaPorId(1, 10, 'usuario');
+
+      expect(porCodigo.numerosDisponibles).toEqual([4]);
+      expect(detalle.numerosDisponibles).toEqual([4]);
     });
   });
 });

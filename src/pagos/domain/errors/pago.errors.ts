@@ -40,9 +40,11 @@ export class NumeroAjenoError extends DomainError {
   }
 }
 
-export class NoEsOrganizadorError extends DomainError {
-  constructor() {
-    super('Solo el organizador de la tanda puede confirmar este pago');
+export class UsuarioNoAutorizadoError extends DomainError {
+  constructor(
+    message = 'Solo el organizador de la tanda o un administrador global pueden realizar esta acción',
+  ) {
+    super(message);
   }
 }
 
@@ -87,6 +89,18 @@ export class ReglaNegocioPagoError extends DomainError {
 export class PagoRechazadoError extends DomainError {
   constructor() {
     super('El pago fue rechazado y no admite más confirmaciones');
+  }
+}
+
+export class PagoYaRechazadoError extends DomainError {
+  constructor() {
+    super('Este pago ya fue rechazado previamente');
+  }
+}
+
+export class MotivoRechazoRequeridoError extends DomainError {
+  constructor() {
+    super('El motivo de rechazo es obligatorio');
   }
 }
 

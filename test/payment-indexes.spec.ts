@@ -1,15 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { getTableConfig } from 'drizzle-orm/pg-core';
-import { paymentTable, evidenceTable } from '../src/database/tandea.schema';
+import { paymentTable, payoutTable, evidenceTable } from '../src/database/tandea.schema';
 
 /**
- * [BD-PAGO] Verificación de Índices para el Panel de Seguimiento de Pagos.
+ * [BD-PAGO] Verificación de Índices para el Panel de Seguimiento de Pagos y Entregas.
  *
  * Valida que los índices requeridos estén definidos en la capa de persistencia
  * (Drizzle ORM) para optimizar las consultas de seguimiento de pagos por turno
- * y estado, así como la consulta de evidencias asociadas a cada pago.
+ * y estado, seguimiento de entregas (payout) por turno y estado,
+ * así como la consulta de evidencias asociadas.
  */
-describe('[BD-PAGO] Índices de Seguimiento de Pagos', () => {
+describe('[BD-PAGO] Índices de Seguimiento de Pagos y Entregas', () => {
   it('la tabla payment debe incluir el índice compuesto (id_number, status)', () => {
     const config = getTableConfig(paymentTable);
 
@@ -48,5 +49,20 @@ describe('[BD-PAGO] Índices de Seguimiento de Pagos', () => {
     expect(idPaymentIdx).toBeDefined();
     const columnNames = idPaymentIdx?.config.columns.map((c: any) => c.name);
     expect(columnNames).toEqual(['id_payment']);
+  });
+
+  it('la tabla payout debe incluir el índice compuesto (id_number, status)', () => {
+    const config = getTableConfig(payoutTable);
+
+    expect(config.indexes).toBeDefined();
+    const compositeIdx = config.indexes.find(
+      (idx) => idx.config.name === 'payout_id_number_status_idx',
+    );
+
+    expect(compositeIdx).toBeDefined();
+    expect(compositeIdx?.config.name).toBe('payout_id_number_status_idx');
+
+    const columnNames = compositeIdx?.config.columns.map((c: any) => c.name);
+    expect(columnNames).toEqual(['id_number', 'status']);
   });
 });
