@@ -25,6 +25,8 @@ export interface NumberRecord {
   estadoPago?: string | null;
   montoPagado?: number | null;
   fechaPago?: Date | null;
+  /** Entrega del dinero de este turno, si ya se registró. */
+  idPayout?: number | null;
 }
 
 export interface NumberRepositoryPort {

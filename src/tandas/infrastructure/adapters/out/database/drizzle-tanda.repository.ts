@@ -19,6 +19,7 @@ import {
   tandaTable,
   numberTable,
   paymentTable,
+  payoutTable,
   userTable,
 } from '../../../../../database/tandea.schema';
 import { Tanda, TandaStatus } from '../../../../domain/entities/tanda.entity';
@@ -406,6 +407,7 @@ export class DrizzleTandaRepository
         estadoPago: paymentTable.status,
         montoPagado: paymentTable.totalAmount,
         fechaPago: paymentTable.createdAt,
+        idPayout: payoutTable.idPayout,
       })
       .from(numberTable)
       .leftJoin(userTable, eq(numberTable.idUser, userTable.idUser))
@@ -414,6 +416,13 @@ export class DrizzleTandaRepository
         and(
           eq(paymentTable.idNumber, numberTable.idNumber),
           inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+        ),
+      )
+      .leftJoin(
+        payoutTable,
+        and(
+          eq(payoutTable.idNumber, numberTable.idNumber),
+          inArray(payoutTable.status, ['PENDIENTE', 'CONFIRMADO']),
         ),
       )
       .where(
@@ -439,6 +448,7 @@ export class DrizzleTandaRepository
       estadoPago: r.estadoPago,
       montoPagado: r.montoPagado === null ? null : Number(r.montoPagado),
       fechaPago: r.fechaPago,
+      idPayout: r.idPayout,
     }));
   }
 
