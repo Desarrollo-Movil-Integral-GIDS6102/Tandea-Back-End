@@ -163,6 +163,7 @@ export const tandaTable = pgTable(
     numParticipants: integer('num_participants').notNull(),
     numRounds: integer('num_rounds').notNull(),
     graceDays: integer('grace_days').notNull(),
+    periodicity: varchar('periodicity', { length: 20 }).notNull().default('quincenal'),
     hasDeadNumber: boolean('has_dead_number').notNull().default(false),
     idTandaType: integer('id_tanda_type')
       .notNull()

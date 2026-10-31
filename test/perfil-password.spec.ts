@@ -16,6 +16,7 @@ describe('[BE-AUTH] Cambio de contraseña con código de 6 dígitos', () => {
     );
     repo = {
       findById: vi.fn().mockResolvedValue(user),
+      findByEmail: vi.fn().mockResolvedValue(user),
       findActivePasswordResetCode: vi.fn().mockResolvedValue(null),
       createPasswordResetCode: vi.fn(),
       incrementPasswordResetAttempts: vi.fn(),
@@ -87,5 +88,41 @@ describe('[BE-AUTH] Cambio de contraseña con código de 6 dígitos', () => {
     await expect(service.cambiarPassword(7, '482913', 'Montaña-Verde-Lago')).rejects.toThrow(
       'expiró',
     );
+  });
+
+  it('recuperar: envía el código al correo registrado', async () => {
+    await service.solicitarRecuperacion('ana@ejemplo.com');
+
+    expect(mail.sendMail).toHaveBeenCalledOnce();
+  });
+
+  it('recuperar: con un correo desconocido no envía nada ni falla', async () => {
+    repo.findByEmail.mockResolvedValue(null);
+
+    await expect(service.solicitarRecuperacion('nadie@ejemplo.com')).resolves.toBeUndefined();
+    expect(mail.sendMail).not.toHaveBeenCalled();
+  });
+
+  it('recuperar: si el correo falla no lo revela', async () => {
+    mail.sendMail.mockResolvedValue(false);
+
+    await expect(service.solicitarRecuperacion('ana@ejemplo.com')).resolves.toBeUndefined();
+  });
+
+  it('restablecer: cambia la contraseña con el código correcto', async () => {
+    repo.findActivePasswordResetCode.mockResolvedValue(await codigoGuardado('482913'));
+
+    await service.restablecerPassword('ana@ejemplo.com', '482913', 'Montaña-Verde-Lago');
+
+    expect(repo.updatePassword).toHaveBeenCalledOnce();
+    expect(repo.markPasswordResetCodeUsed).toHaveBeenCalledWith(1);
+  });
+
+  it('restablecer: un correo desconocido responde igual que un código inválido', async () => {
+    repo.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.restablecerPassword('nadie@ejemplo.com', '482913', 'Montaña-Verde-Lago'),
+    ).rejects.toThrow('El código expiró o no existe');
   });
 });

@@ -34,6 +34,8 @@ import {
 import {
   zActualizarPerfilDto,
   zCambiarPasswordDto,
+  zRecuperarPasswordDto,
+  zRestablecerPasswordDto,
 } from '../../../../../application/dtos/perfil.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -51,6 +53,30 @@ export class AuthController {
     @Inject(PERFIL_USE_CASE_PORT)
     private readonly perfilService: PerfilUseCasePort,
   ) {}
+
+  /**
+   * POST /api/v1/auth/password/recuperar
+   * Público. Envía el código si el correo existe; responde igual si no existe.
+   */
+  @Post('password/recuperar')
+  @HttpCode(HttpStatus.OK)
+  async recuperarPassword(@Body() body: unknown) {
+    const { email } = zRecuperarPasswordDto.parse(body ?? {});
+    await this.perfilService.solicitarRecuperacion(email);
+    return { mensaje: 'Si el correo está registrado, te enviamos un código de 6 dígitos' };
+  }
+
+  /**
+   * POST /api/v1/auth/password/restablecer
+   * Público. Cambia la contraseña con el código recibido por correo.
+   */
+  @Post('password/restablecer')
+  @HttpCode(HttpStatus.OK)
+  async restablecerPassword(@Body() body: unknown) {
+    const dto = zRestablecerPasswordDto.parse(body ?? {});
+    await this.perfilService.restablecerPassword(dto.email, dto.codigo, dto.nuevaPassword);
+    return { mensaje: 'Contraseña actualizada' };
+  }
 
   /**
    * GET /api/v1/auth/perfil

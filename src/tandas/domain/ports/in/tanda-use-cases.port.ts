@@ -1,5 +1,6 @@
 // src/tandas/domain/ports/in/tanda-use-cases.port.ts
 import { Tanda, TandaStatus, TandaProps } from '../../entities/tanda.entity';
+import type { PeriodicidadTanda } from '../../services/calcular-plan';
 import { NumberRecord } from '../out/number-repository.port';
 
 export interface CreateTandaCommand {
@@ -10,6 +11,7 @@ export interface CreateTandaCommand {
   numParticipants: number;
   numRounds?: number;
   graceDays?: number;
+  periodicity?: PeriodicidadTanda;
   hasDeadNumber?: boolean;
   idTandaType?: number;
   idAdmin: number;
@@ -53,6 +55,24 @@ export interface TandaDetalle extends TandaProps {
 
 export type TandaConDisponibles = TandaProps & { numerosDisponibles: number[] };
 
+export interface SeguimientoParticipante {
+  idNumber: number;
+  numberValue: number;
+  nombre: string;
+  isDeadNumber: boolean;
+  idPayment: number | null;
+  estadoPago: string;
+  montoPagado: number;
+  fechaPago: Date | null;
+}
+
+export interface SeguimientoTanda {
+  tanda: Pick<TandaProps, 'idTanda' | 'name' | 'numRounds' | 'contributionAmount'>;
+  vueltaActual: number;
+  cuota: number;
+  participantes: SeguimientoParticipante[];
+}
+
 export interface JoinTandaCommand {
   inviteCode: string;
   idUser: number;
@@ -75,6 +95,7 @@ export interface JoinTandaResult {
 export interface TandaUseCasesPort {
   crearTanda(command: CreateTandaCommand): Promise<Tanda>;
   obtenerTandaPorId(idTanda: number, userId: number, role: string): Promise<TandaDetalle>;
+  obtenerSeguimiento(idTanda: number, userId: number, role: string): Promise<SeguimientoTanda>;
   obtenerPorCodigoInvitacion(inviteCode: string): Promise<TandaConDisponibles>;
   listarTandas(query: ListTandasQuery, userId: number, role: string): Promise<PaginatedTandasResult>;
   actualizarTanda(idTanda: number, command: UpdateTandaCommand, userId: number, role: string): Promise<Tanda>;

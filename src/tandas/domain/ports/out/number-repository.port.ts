@@ -18,7 +18,13 @@ export interface NumberRecord {
   isDeadNumber: boolean;
   status: string;
   userName?: string | null;
+  userLastName?: string | null;
   userEmail?: string | null;
+  /** Pago vigente (PENDIENTE o CONFIRMADO) del número; un pago rechazado no cuenta. */
+  idPayment?: number | null;
+  estadoPago?: string | null;
+  montoPagado?: number | null;
+  fechaPago?: Date | null;
 }
 
 export interface NumberRepositoryPort {

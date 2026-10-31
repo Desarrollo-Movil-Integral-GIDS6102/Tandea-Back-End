@@ -23,4 +23,7 @@ export interface PerfilUseCasePort {
   /** Envía al correo del usuario un código de 6 dígitos válido por 10 minutos. */
   solicitarCodigoPassword(idUser: number): Promise<void>;
   cambiarPassword(idUser: number, codigo: string, nuevaPassword: string): Promise<void>;
+  /** Olvidé mi contraseña: nunca revela si el correo está registrado. */
+  solicitarRecuperacion(email: string): Promise<void>;
+  restablecerPassword(email: string, codigo: string, nuevaPassword: string): Promise<void>;
 }

@@ -180,6 +180,21 @@ export class TandaController {
   }
 
   /**
+   * GET /tandas/:id/seguimiento
+   * Quién pagó y quién no (solo organizador o admin global).
+   */
+  @Get(':id/seguimiento')
+  async obtenerSeguimiento(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.tandaService.obtenerSeguimiento(id, user.idUser, user.role),
+    };
+  }
+
+  /**
    * PATCH /tandas/:id
    * Actualizar nombre o descripción de la tanda (solo organizador o admin global).
    */

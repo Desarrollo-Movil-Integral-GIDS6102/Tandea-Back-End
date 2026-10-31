@@ -38,3 +38,12 @@ export const zCambiarPasswordDto = z.object({
     .string({ required_error: 'La nueva contraseña es requerida' })
     .min(1, 'La nueva contraseña es requerida'),
 });
+
+const zCorreo = z
+  .string({ required_error: 'El correo electrónico es requerido' })
+  .trim()
+  .email('El formato del correo electrónico no es válido');
+
+export const zRecuperarPasswordDto = z.object({ email: zCorreo });
+
+export const zRestablecerPasswordDto = zCambiarPasswordDto.extend({ email: zCorreo });

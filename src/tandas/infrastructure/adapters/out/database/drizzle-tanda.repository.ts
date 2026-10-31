@@ -64,6 +64,7 @@ export class DrizzleTandaRepository
         numParticipants: tanda.numParticipants,
         numRounds: tanda.numRounds,
         graceDays: tanda.graceDays,
+        periodicity: tanda.periodicity,
         hasDeadNumber: tanda.hasDeadNumber,
         idTandaType: tanda.idTandaType,
         idAdmin: tanda.idAdmin,
@@ -399,10 +400,22 @@ export class DrizzleTandaRepository
         isDeadNumber: numberTable.isDeadNumber,
         status: numberTable.status,
         userName: userTable.name,
+        userLastName: userTable.lastName,
         userEmail: userTable.email,
+        idPayment: paymentTable.idPayment,
+        estadoPago: paymentTable.status,
+        montoPagado: paymentTable.totalAmount,
+        fechaPago: paymentTable.createdAt,
       })
       .from(numberTable)
       .leftJoin(userTable, eq(numberTable.idUser, userTable.idUser))
+      .leftJoin(
+        paymentTable,
+        and(
+          eq(paymentTable.idNumber, numberTable.idNumber),
+          inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+        ),
+      )
       .where(
         and(
           eq(numberTable.idTanda, idTanda),
@@ -420,7 +433,12 @@ export class DrizzleTandaRepository
       isDeadNumber: r.isDeadNumber,
       status: r.status,
       userName: r.userName,
+      userLastName: r.userLastName,
       userEmail: r.userEmail,
+      idPayment: r.idPayment,
+      estadoPago: r.estadoPago,
+      montoPagado: r.montoPagado === null ? null : Number(r.montoPagado),
+      fechaPago: r.fechaPago,
     }));
   }
 
@@ -536,6 +554,7 @@ export class DrizzleTandaRepository
       numParticipants: row.numParticipants,
       numRounds: row.numRounds,
       graceDays: row.graceDays,
+      periodicity: row.periodicity,
       hasDeadNumber: row.hasDeadNumber,
       idTandaType: row.idTandaType,
       idAdmin: row.idAdmin,

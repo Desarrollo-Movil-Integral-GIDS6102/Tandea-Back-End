@@ -16,10 +16,12 @@ import {
   JoinTandaCommand,
   JoinTandaResult,
   TandaConDisponibles,
+  SeguimientoTanda,
 } from '../../domain/ports/in/tanda-use-cases.port';
 import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
 import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
 import { sortearNumeros } from '../../domain/services/sortear-numeros';
+import { calcularPlan } from '../../domain/services/calcular-plan';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
 import { Tanda, TandaStatus } from '../../domain/entities/tanda.entity';
@@ -67,15 +69,29 @@ export class TandaService implements TandaUseCasesPort {
       throw new ConflictException('No se pudo generar un código único de tanda. Reintente.');
     }
 
-    // 3. Instanciar y persistir entidad
+    // 3. Instanciar y persistir entidad. El número muerto suma un turno por vuelta y
+    // recorre la fecha final un periodo más (una quincena, un día, etc.)
+    const periodicity = command.periodicity ?? 'quincenal';
+    const numRounds = command.numRounds ?? 1;
+    const { fechaFin } = calcularPlan({
+      periodicidad: periodicity,
+      montoCuota: command.contributionAmount,
+      numParticipantes: command.numParticipants,
+      numVueltas: numRounds,
+      tieneNumeroMuerto: command.hasDeadNumber ?? false,
+      fechaInicio: new Date(`${command.startDate}T12:00:00.000Z`),
+    });
+
     const tanda = new Tanda({
       name: command.name,
       description: command.description,
       startDate: command.startDate,
+      endDate: fechaFin.toISOString().slice(0, 10),
       contributionAmount: command.contributionAmount,
       numParticipants: command.numParticipants,
-      numRounds: command.numRounds ?? 1,
+      numRounds,
       graceDays: command.graceDays ?? 0,
+      periodicity,
       hasDeadNumber: command.hasDeadNumber ?? false,
       idTandaType: command.idTandaType ?? 1,
       idAdmin: command.idAdmin,
@@ -130,8 +146,44 @@ export class TandaService implements TandaUseCasesPort {
       ...tanda.toPrimitives(),
       rolUsuario,
       participantes,
-      misNumeros: userNumbers,
+      // Se toman de `participantes` porque ahí viene el estado de pago de cada número
+      misNumeros: participantes.filter((n) => n.idUser === userId),
       numerosDisponibles: tanda.aceptaParticipantes ? await this.numerosLibres(tanda) : [],
+    };
+  }
+
+  async obtenerSeguimiento(idTanda: number, userId: number, role: string): Promise<SeguimientoTanda> {
+    const tanda = await this.tandaRepository.findById(idTanda);
+    if (!tanda || !tanda.active) {
+      throw new NotFoundException(`Tanda con id ${idTanda} no encontrada`);
+    }
+    if (tanda.idAdmin !== userId && role !== 'admin_global') {
+      throw new ForbiddenException('Solo el organizador puede ver el seguimiento de pagos');
+    }
+
+    const numeros = await this.numberRepository.findNumbersByTanda(idTanda);
+    return {
+      tanda: {
+        idTanda: tanda.idTanda,
+        name: tanda.name,
+        numRounds: tanda.numRounds,
+        contributionAmount: tanda.contributionAmount,
+      },
+      vueltaActual: 1,
+      cuota: tanda.contributionAmount,
+      // shortcut: el número muerto no paga y aquí se omite; la tarjeta SP-4-[FE-AJUSTE] lo agrega
+      participantes: numeros
+        .filter((n) => !n.isDeadNumber)
+        .map((n) => ({
+          idNumber: n.idNumber,
+          numberValue: n.numberValue,
+          nombre: [n.userName, n.userLastName].filter(Boolean).join(' '),
+          isDeadNumber: false,
+          idPayment: n.idPayment ?? null,
+          estadoPago: n.estadoPago ?? 'PENDIENTE',
+          montoPagado: n.montoPagado ?? 0,
+          fechaPago: n.fechaPago ?? null,
+        })),
     };
   }
 

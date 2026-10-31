@@ -49,6 +49,12 @@ export const zCreateTanda = z.object({
     .min(0, 'Los días de gracia no pueden ser negativos')
     .default(0),
 
+  periodicity: z
+    .enum(['diaria', 'semanal', 'quincenal', 'mensual'], {
+      invalid_type_error: 'El campo "periodicity" debe ser diaria, semanal, quincenal o mensual',
+    })
+    .default('quincenal'),
+
   hasDeadNumber: z
     .boolean({ invalid_type_error: 'El campo "hasDeadNumber" debe ser booleano (true o false)' })
     .default(false),

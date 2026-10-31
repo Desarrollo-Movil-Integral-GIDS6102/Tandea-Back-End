@@ -80,7 +80,7 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort, Perfi
 
   /**
    * Genera el token JWT firmado con { sub: user.idUser, email: user.email, role: user.role }
-   * Expiración: 1 día (configurado en JwtModule).
+   * Expiración: 30 días (configurado en JwtModule).
    */
   async login(user: AuthUserEntity): Promise<LoginResult> {
     const payload = {
@@ -246,6 +246,23 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort, Perfi
 
     await this.userRepository.updatePassword(idUser, await bcrypt.hash(nuevaPassword, 10));
     await this.userRepository.markPasswordResetCodeUsed(registro.idCode);
+  }
+
+  async solicitarRecuperacion(email: string): Promise<void> {
+    const user = await this.userRepository.findByEmail(email);
+    if (!user || !user.active) {
+      return;
+    }
+    // Cualquier fallo se calla: responder distinto revelaría que el correo existe
+    await this.solicitarCodigoPassword(user.idUser).catch(() => undefined);
+  }
+
+  async restablecerPassword(email: string, codigo: string, nuevaPassword: string): Promise<void> {
+    const user = await this.userRepository.findByEmail(email);
+    if (!user || !user.active) {
+      throw new BadRequestException('El código expiró o no existe. Solicita uno nuevo.');
+    }
+    await this.cambiarPassword(user.idUser, codigo, nuevaPassword);
   }
 
   private aPerfil(user: AuthUserEntity): PerfilUsuario {

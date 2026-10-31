@@ -1,3 +1,5 @@
+import type { PeriodicidadTanda } from '../services/calcular-plan';
+
 export type TandaStatus = 'PENDIENTE' | 'ACTIVA' | 'FINALIZADA' | 'SUSPENDIDA' | 'CANCELADA';
 
 /** tanda_type.id de "Sorteo" (seed: 1 Tradicional, 2 Sorteo, 3 Solidaria). */
@@ -13,6 +15,7 @@ export interface TandaProps {
   numParticipants: number;
   numRounds: number;
   graceDays: number;
+  periodicity?: PeriodicidadTanda;
   hasDeadNumber: boolean;
   idTandaType: number;
   idAdmin: number;
@@ -56,6 +59,7 @@ export class Tanda {
   get numParticipants(): number { return this.props.numParticipants; }
   get numRounds(): number { return this.props.numRounds; }
   get graceDays(): number { return this.props.graceDays; }
+  get periodicity(): PeriodicidadTanda { return this.props.periodicity ?? 'quincenal'; }
   get hasDeadNumber(): boolean { return this.props.hasDeadNumber; }
   get idTandaType(): number { return this.props.idTandaType; }
   get esSorteo(): boolean { return this.props.idTandaType === ID_TIPO_SORTEO; }
@@ -95,6 +99,6 @@ export class Tanda {
   }
 
   toPrimitives(): TandaProps {
-    return { ...this.props, status: this.status, active: this.active };
+    return { ...this.props, periodicity: this.periodicity, status: this.status, active: this.active };
   }
 }

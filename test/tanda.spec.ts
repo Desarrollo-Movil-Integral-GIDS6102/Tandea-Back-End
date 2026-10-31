@@ -290,6 +290,74 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
     });
   });
 
+  describe('Plan y seguimiento', () => {
+    const crear = async (periodicity: 'diaria' | 'quincenal', hasDeadNumber: boolean) => {
+      vi.spyOn(mockTandaRepo, 'findByInviteCode').mockResolvedValue(null);
+      vi.spyOn(mockTandaRepo, 'create').mockImplementation(async (t) => t);
+      return service.crearTanda({
+        name: 'Tanda plan',
+        startDate: '2026-11-01',
+        contributionAmount: 100,
+        numParticipants: 3,
+        periodicity,
+        hasDeadNumber,
+        idAdmin: 10,
+      });
+    };
+
+    it('sin número muerto la tanda termina en el turno N', async () => {
+      expect((await crear('quincenal', false)).endDate).toBe('2026-12-01');
+    });
+
+    it('el número muerto agrega una quincena más', async () => {
+      const tanda = await crear('quincenal', true);
+
+      expect(tanda.endDate).toBe('2026-12-16');
+      expect(tanda.periodicity).toBe('quincenal');
+    });
+
+    it('en una tanda diaria el número muerto agrega un día más', async () => {
+      expect((await crear('diaria', true)).endDate).toBe('2026-11-04');
+    });
+
+    const numeros = [
+      { idNumber: 1, idTanda: 1, roundNumber: 1, numberValue: 0, idUser: null, isDeadNumber: true, status: 'PENDIENTE' },
+      {
+        idNumber: 2, idTanda: 1, roundNumber: 1, numberValue: 1, idUser: 30, isDeadNumber: false, status: 'PENDIENTE',
+        userName: 'Ana', userLastName: 'López', idPayment: 9, estadoPago: 'CONFIRMADO', montoPagado: 1000,
+      },
+      { idNumber: 3, idTanda: 1, roundNumber: 1, numberValue: 2, idUser: 31, isDeadNumber: false, status: 'PENDIENTE', userName: 'Luis' },
+    ];
+
+    it('el organizador ve quién pagó y quién no, sin el número muerto', async () => {
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(new Tanda(mockTandaData));
+      vi.spyOn(mockNumberRepo, 'findNumbersByTanda').mockResolvedValue(numeros);
+
+      const res = await service.obtenerSeguimiento(1, 10, 'usuario');
+
+      expect(res.participantes.map((p) => [p.numberValue, p.nombre, p.estadoPago, p.idPayment])).toEqual([
+        [1, 'Ana López', 'CONFIRMADO', 9],
+        [2, 'Luis', 'PENDIENTE', null],
+      ]);
+    });
+
+    it('un participante no puede ver el seguimiento', async () => {
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(new Tanda(mockTandaData));
+
+      await expect(service.obtenerSeguimiento(1, 30, 'usuario')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('el detalle entrega el estado de pago de mis números', async () => {
+      vi.spyOn(mockTandaRepo, 'findById').mockResolvedValue(new Tanda(mockTandaData));
+      vi.spyOn(mockNumberRepo, 'findByUserInTanda').mockResolvedValue([numeros[1]]);
+      vi.spyOn(mockNumberRepo, 'findNumbersByTanda').mockResolvedValue(numeros);
+
+      const detalle = await service.obtenerTandaPorId(1, 30, 'usuario');
+
+      expect(detalle.misNumeros).toEqual([expect.objectContaining({ numberValue: 1, estadoPago: 'CONFIRMADO' })]);
+    });
+  });
+
   describe('Iniciar Tanda', () => {
     it('debe rechazar iniciar la tanda si faltan números por apartar', async () => {
       const tanda = new Tanda(mockTandaData);
