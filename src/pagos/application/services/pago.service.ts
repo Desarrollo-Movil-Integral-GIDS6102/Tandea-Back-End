@@ -31,6 +31,7 @@ import {
   type RegistrarPagoCommand,
   type UsuarioAutenticado,
 } from '../../domain/ports/in/pago-use-cases.port';
+import { fechaInicioPagos } from '../../../tandas/domain/services/generar-calendario';
 
 /**
  * PagoService — Servicio de Aplicación (Orquestador de Casos de Uso).
@@ -79,6 +80,20 @@ export class PagoService implements PagoUseCasesPort {
       throw new ReglaNegocioPagoError(
         'Los pagos se habilitan cuando el organizador inicia la tanda',
       );
+    }
+    if (numero.tanda.hasDeadNumber && numero.tanda.startDate) {
+      // El turno #0 (número muerto) no genera pagos; se cobra a partir del turno #1
+      const inicioPagos = fechaInicioPagos(
+        numero.tanda.startDate,
+        numero.tanda.periodicity ?? 'quincenal',
+        true,
+      );
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+      if (hoy < inicioPagos) {
+        throw new ReglaNegocioPagoError(
+          `La tanda está en el turno #0 (número muerto), que no genera pagos. Podrás pagar a partir del ${inicioPagos}`,
+        );
+      }
     }
 
     // 2. Un solo pago pendiente/confirmado por número (cada número es de una vuelta)

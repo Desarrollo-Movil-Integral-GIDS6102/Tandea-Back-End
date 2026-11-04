@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PagoService } from './pago.service';
 import { Pago } from '../../domain/entities/Pago';
 import {
@@ -309,6 +309,45 @@ describe('PagoService', () => {
         repo.buscarNumeroConCuota.mockResolvedValue(numero({ tanda: null }));
 
         await expect(registrar()).rejects.toThrowError(TandaNoEncontradaError);
+      });
+
+      describe('turno #0 (número muerto)', () => {
+        const tandaConMuerto = (startDate: string) =>
+          numero({
+            tanda: {
+              idTanda: ID_TANDA,
+              contributionAmount: 1000,
+              idAdmin: ID_ORGANIZADOR,
+              status: 'ACTIVA',
+              startDate,
+              periodicity: 'semanal',
+              hasDeadNumber: true,
+            },
+          });
+
+        beforeEach(() => {
+          vi.useFakeTimers({ toFake: ['Date'] });
+          vi.setSystemTime(new Date('2026-11-05T18:00:00.000Z'));
+        });
+
+        afterEach(() => {
+          vi.useRealTimers();
+        });
+
+        it('rechaza el pago mientras la tanda está en el turno #0', async () => {
+          // Inicio 2026-11-01 semanal: el turno #1 empieza el 2026-11-08
+          repo.buscarNumeroConCuota.mockResolvedValue(tandaConMuerto('2026-11-01'));
+
+          await expect(registrar()).rejects.toThrowError(ReglaNegocioPagoError);
+          expect(storage.subir).not.toHaveBeenCalled();
+          expect(repo.create).not.toHaveBeenCalled();
+        });
+
+        it('acepta el pago una vez terminado el turno #0', async () => {
+          repo.buscarNumeroConCuota.mockResolvedValue(tandaConMuerto('2026-10-29'));
+
+          await expect(registrar()).resolves.toBeInstanceOf(Pago);
+        });
       });
 
       it('rechaza el pago si la tanda aún no fue iniciada por el organizador', async () => {

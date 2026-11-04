@@ -153,38 +153,7 @@ export function calcularPlan(
 
   // ── Cálculo de fechaFin (fecha del último turno) ───────────────────────────
   // Periodos a sumar = totalTurnos - 1
-  const periodos = totalTurnos - 1;
-  const fechaFin = new Date(fechaInicio.getTime());
-
-  if (periodos > 0) {
-    switch (periodicidad) {
-      case 'diaria':
-        fechaFin.setDate(fechaFin.getDate() + periodos);
-        break;
-      case 'semanal':
-        fechaFin.setDate(fechaFin.getDate() + periodos * 7);
-        break;
-      case 'quincenal':
-        fechaFin.setDate(fechaFin.getDate() + periodos * 15);
-        break;
-      case 'mensual': {
-        const targetYear =
-          fechaInicio.getFullYear() +
-          Math.floor((fechaInicio.getMonth() + periodos) / 12);
-        const targetMonth = (fechaInicio.getMonth() + periodos) % 12;
-        // Último día del mes de destino (el día 0 del mes siguiente da el último día del mes actual)
-        const lastDayOfTargetMonth = new Date(
-          targetYear,
-          targetMonth + 1,
-          0,
-        ).getDate();
-        const targetDay = Math.min(fechaInicio.getDate(), lastDayOfTargetMonth);
-
-        fechaFin.setFullYear(targetYear, targetMonth, targetDay);
-        break;
-      }
-    }
-  }
+  const fechaFin = sumarPeriodos(fechaInicio, periodicidad, totalTurnos - 1);
 
   // Retornar objeto inmutable
   return Object.freeze({
@@ -195,4 +164,44 @@ export function calcularPlan(
     montoTotalPorParticipante,
     fechaFin,
   });
+}
+
+/**
+ * Devuelve una nueva fecha `periodos` periodos después de `fecha` (no la modifica).
+ * En mensual se ajusta al último día si el mes destino tiene menos días.
+ */
+export function sumarPeriodos(
+  fecha: Date,
+  periodicidad: PeriodicidadTanda,
+  periodos: number,
+): Date {
+  const resultado = new Date(fecha.getTime());
+  if (periodos <= 0) {
+    return resultado;
+  }
+
+  switch (periodicidad) {
+    case 'diaria':
+      resultado.setDate(resultado.getDate() + periodos);
+      break;
+    case 'semanal':
+      resultado.setDate(resultado.getDate() + periodos * 7);
+      break;
+    case 'quincenal':
+      resultado.setDate(resultado.getDate() + periodos * 15);
+      break;
+    case 'mensual': {
+      const targetYear =
+        fecha.getFullYear() + Math.floor((fecha.getMonth() + periodos) / 12);
+      const targetMonth = (fecha.getMonth() + periodos) % 12;
+      // Último día del mes de destino (el día 0 del mes siguiente da el último día del mes actual)
+      const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const targetDay = Math.min(fecha.getDate(), lastDayOfTargetMonth);
+
+      resultado.setFullYear(targetYear, targetMonth, targetDay);
+      break;
+    }
+  }
+
+  return resultado;
 }

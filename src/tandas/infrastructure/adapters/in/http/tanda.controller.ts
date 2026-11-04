@@ -195,6 +195,21 @@ export class TandaController {
   }
 
   /**
+   * GET /tandas/:id/calendario
+   * Calendario de turnos con fecha de cobro y monto a esperar (AP-06).
+   */
+  @Get(':id/calendario')
+  async obtenerCalendario(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.tandaService.obtenerCalendario(id, user.idUser, user.role),
+    };
+  }
+
+  /**
    * PATCH /tandas/:id
    * Actualizar nombre o descripción de la tanda (solo organizador o admin global).
    */
