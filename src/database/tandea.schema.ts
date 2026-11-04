@@ -110,6 +110,7 @@ export const userTable = pgTable(
       .notNull()
       .references(() => roleTable.idRole),
     active: boolean('active').notNull().default(true), // false = suspendido
+    fcmToken: text('fcm_token'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
