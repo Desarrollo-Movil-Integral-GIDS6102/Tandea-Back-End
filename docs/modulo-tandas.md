@@ -75,3 +75,11 @@ El módulo de Tandas orquesta la creación, configuración financiera, invitaci�
 * **`POST /api/v1/tandas/unirse`**: Valida código de invitación, cupos y añade al participante.
 * **`PATCH /api/v1/tandas/:id/numero`**: Reserva y asigna un número específico de cobro para el participante.
 * **`GET /api/v1/tandas`**: Consulta listados con filtros por rol (`participante` u `organizador`).
+* **`GET /api/v1/tandas/:id/calendario`**: Calendario de turnos (AP-06) para el organizador, los participantes y el admin global. Cada turno trae `turno`, `vuelta`, `numero`, `esNumeroMuerto`, `usuario`, `fechaCobro` y `montoAEsperar`, además de `fechaInicioPagos`. Se recalcula en cada petición con `generarCalendario` (`src/tandas/domain/services/generar-calendario.ts`) y no guarda fechas en BD.
+
+### Calendario de turnos y número muerto
+
+* El turno k cobra en `startDate + (k - 1)` periodos; el último coincide con `endDate`.
+* En cada vuelta el orden es #0 (si hay número muerto) y luego #1..#N. Solo existen filas de la vuelta 1, así que las demás vueltas repiten esos dueños.
+* El turno #0 no genera pagos (`montoAEsperar = 0`). `POST /pagos` rechaza con 422 cualquier pago antes de `fechaInicioPagos` (fecha de la Ciudad de México).
+* En los demás turnos se espera `cuota × numParticipants`.

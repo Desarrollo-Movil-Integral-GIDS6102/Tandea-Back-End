@@ -8,6 +8,7 @@ import {
 } from '../../../../domain/ports/out/pago-repository.port';
 import { Pago } from '../../../../domain/entities/Pago';
 import { PagoDuplicadoError } from '../../../../domain/errors/pago.errors';
+import type { PeriodicidadTanda } from '../../../../../tandas/domain/services/calcular-plan';
 import {
   paymentTable,
   evidenceTable,
@@ -75,6 +76,9 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
         contributionAmount: tandaTable.contributionAmount,
         idAdmin: tandaTable.idAdmin,
         status: tandaTable.status,
+        startDate: tandaTable.startDate,
+        periodicity: tandaTable.periodicity,
+        hasDeadNumber: tandaTable.hasDeadNumber,
       })
       .from(numberTable)
       .leftJoin(
@@ -102,6 +106,9 @@ export class DrizzlePagoRepository implements PagoRepositoryPort {
               contributionAmount: parseFloat(row.contributionAmount),
               idAdmin: row.idAdmin ?? undefined,
               status: row.status ?? 'PENDIENTE',
+              startDate: row.startDate ?? undefined,
+              periodicity: (row.periodicity ?? undefined) as PeriodicidadTanda | undefined,
+              hasDeadNumber: row.hasDeadNumber ?? false,
             }
           : null,
     };

@@ -17,11 +17,13 @@ import {
   JoinTandaResult,
   TandaConDisponibles,
   SeguimientoTanda,
+  CalendarioTanda,
 } from '../../domain/ports/in/tanda-use-cases.port';
 import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
 import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
 import { sortearNumeros } from '../../domain/services/sortear-numeros';
 import { calcularPlan } from '../../domain/services/calcular-plan';
+import { generarCalendario, fechaInicioPagos } from '../../domain/services/generar-calendario';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
 import { Tanda, TandaStatus } from '../../domain/entities/tanda.entity';
@@ -184,6 +186,49 @@ export class TandaService implements TandaUseCasesPort {
           montoPagado: n.montoPagado ?? 0,
           fechaPago: n.fechaPago ?? null,
         })),
+    };
+  }
+
+  async obtenerCalendario(idTanda: number, userId: number, role: string): Promise<CalendarioTanda> {
+    const tanda = await this.tandaRepository.findById(idTanda);
+    if (!tanda || !tanda.active) {
+      throw new NotFoundException(`Tanda con id ${idTanda} no encontrada`);
+    }
+
+    const numeros = await this.numberRepository.findNumbersByTanda(idTanda);
+    const isParticipant = numeros.some((n) => n.idUser === userId);
+    if (tanda.idAdmin !== userId && !isParticipant && role !== 'admin_global') {
+      throw new ForbiddenException('No tienes permisos para visualizar esta tanda');
+    }
+
+    return {
+      tanda: {
+        idTanda: tanda.idTanda,
+        name: tanda.name,
+        startDate: tanda.startDate,
+        endDate: tanda.endDate,
+        periodicity: tanda.periodicity,
+        numRounds: tanda.numRounds,
+        hasDeadNumber: tanda.hasDeadNumber,
+        graceDays: tanda.graceDays,
+      },
+      fechaInicioPagos: fechaInicioPagos(tanda.startDate, tanda.periodicity, tanda.hasDeadNumber),
+      // Se recalcula en cada petición; las fechas no se guardan en BD
+      turnos: generarCalendario({
+        startDate: tanda.startDate,
+        periodicidad: tanda.periodicity,
+        montoCuota: tanda.contributionAmount,
+        numParticipantes: tanda.numParticipants,
+        numVueltas: tanda.numRounds,
+        tieneNumeroMuerto: tanda.hasDeadNumber,
+        numeros: numeros
+          .filter((n) => n.roundNumber === 1)
+          .map((n) => ({
+            numberValue: n.numberValue,
+            idUser: n.idUser,
+            nombre: [n.userName, n.userLastName].filter(Boolean).join(' ') || null,
+          })),
+      }),
     };
   }
 
