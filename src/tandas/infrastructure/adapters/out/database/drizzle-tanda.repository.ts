@@ -13,6 +13,7 @@ import {
   count,
   inArray,
   SQL,
+  sql,
 } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import {
@@ -33,6 +34,10 @@ import {
 import {
   TandaRepositoryPort,
   TandaFilterOptions,
+  TipoMovimiento,
+  CursorHistorial,
+  MovimientoRecord,
+  ListarMovimientosOptions,
 } from '../../../../domain/ports/out/tanda-repository.port';
 import {
   NumberRepositoryPort,
@@ -550,6 +555,78 @@ export class DrizzleTandaRepository
 
 
   // =========================================================================
+  // HISTORIAL DE PAGOS Y COBROS (AP-09)
+  // =========================================================================
+
+  async listarMovimientos(
+    idTanda: number,
+    options: ListarMovimientosOptions,
+  ): Promise<MovimientoRecord[]> {
+    // Cada consulta ya viene ordenada y recortada a limit + 1; basta mezclarlas
+    const [pagos, cobros] = await Promise.all([
+      this.consultarMovimientos('PAGO', idTanda, options),
+      this.consultarMovimientos('COBRO', idTanda, options),
+    ]);
+
+    return [...pagos, ...cobros]
+      .sort(compararMovimientosDesc)
+      .slice(0, options.limit + 1);
+  }
+
+  private async consultarMovimientos(
+    tipo: TipoMovimiento,
+    idTanda: number,
+    { idUser, cursor, limit }: ListarMovimientosOptions,
+  ): Promise<MovimientoRecord[]> {
+    const tabla = tipo === 'PAGO' ? paymentTable : payoutTable;
+    const id = tipo === 'PAGO' ? paymentTable.idPayment : payoutTable.idPayout;
+    const fecha = sql<string>`to_char(${tabla.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
+    const condiciones: SQL[] = [eq(numberTable.idTanda, idTanda)];
+    if (idUser !== undefined) {
+      condiciones.push(eq(numberTable.idUser, idUser));
+    }
+    if (cursor) {
+      condiciones.push(condicionDespuesDelCursor(tipo, tabla.createdAt, id, cursor));
+    }
+
+    const rows = await this.db
+      .select({
+        id,
+        idNumber: numberTable.idNumber,
+        numero: numberTable.numberValue,
+        idUser: numberTable.idUser,
+        name: userTable.name,
+        lastName: userTable.lastName,
+        monto: tabla.totalAmount,
+        transferAmount: tabla.transferAmount,
+        cashAmount: tabla.cashAmount,
+        estado: tabla.status,
+        fecha,
+      })
+      .from(tabla)
+      .innerJoin(numberTable, eq(numberTable.idNumber, tabla.idNumber))
+      .leftJoin(userTable, eq(userTable.idUser, numberTable.idUser))
+      .where(and(...condiciones))
+      .orderBy(desc(tabla.createdAt), desc(id))
+      .limit(limit + 1);
+
+    return rows.map((r) => ({
+      tipo,
+      id: r.id,
+      idNumber: r.idNumber,
+      numero: r.numero,
+      idUser: r.idUser,
+      nombre: [r.name, r.lastName].filter(Boolean).join(' ') || null,
+      monto: Number(r.monto),
+      transferAmount: Number(r.transferAmount),
+      cashAmount: Number(r.cashAmount),
+      estado: r.estado,
+      fecha: r.fecha,
+    }));
+  }
+
+  // =========================================================================
   // HELPER MAPPER
   // =========================================================================
 
@@ -576,4 +653,34 @@ export class DrizzleTandaRepository
       deletedAt: row.deletedAt ? new Date(row.deletedAt) : null,
     });
   }
+}
+
+/**
+ * Orden del historial: fecha desc, luego tipo desc ('PAGO' > 'COBRO') y luego id desc.
+ * Las fechas vienen con el mismo formato ISO, así que se comparan como texto.
+ */
+function compararMovimientosDesc(a: MovimientoRecord, b: MovimientoRecord): number {
+  if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+  if (a.tipo !== b.tipo) return a.tipo < b.tipo ? 1 : -1;
+  return b.id - a.id;
+}
+
+/**
+ * Filas que van después del cursor en ese orden. Como el tipo es fijo en cada
+ * consulta, la comparación de la tupla (fecha, tipo, id) se resuelve aquí.
+ */
+function condicionDespuesDelCursor(
+  tipo: TipoMovimiento,
+  createdAt: typeof paymentTable.createdAt | typeof payoutTable.createdAt,
+  id: typeof paymentTable.idPayment | typeof payoutTable.idPayout,
+  cursor: CursorHistorial,
+): SQL {
+  const fechaCursor = sql`${cursor.fecha}::timestamptz`;
+  if (tipo > cursor.tipo) {
+    return sql`${createdAt} < ${fechaCursor}`;
+  }
+  if (tipo < cursor.tipo) {
+    return sql`${createdAt} <= ${fechaCursor}`;
+  }
+  return sql`(${createdAt} < ${fechaCursor} or (${createdAt} = ${fechaCursor} and ${id} < ${cursor.id}))`;
 }

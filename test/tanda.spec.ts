@@ -41,6 +41,7 @@ describe('[BE-TANDA] Servicio de Tandas (CRUD, Filtros y Unirse)', () => {
       updateStatus: vi.fn(),
       softDelete: vi.fn(),
       findAll: vi.fn(),
+      listarMovimientos: vi.fn(),
     };
 
     mockNumberRepo = {
