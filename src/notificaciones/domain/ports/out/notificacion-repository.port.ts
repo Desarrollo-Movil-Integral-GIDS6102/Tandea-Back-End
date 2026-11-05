@@ -1,3 +1,5 @@
+import type { TandaParaRecordatorio } from '../../services/recordatorios-pago';
+
 /**
  * Tipos de notificación que se guardan en `notification.type`.
  */
@@ -5,6 +7,7 @@ export const TIPO_NOTIFICACION = {
   PAGO_REGISTRADO: 'pago_registrado',
   PAGO_CONFIRMADO: 'pago_confirmado',
   PAGO_RECHAZADO: 'pago_rechazado',
+  RECORDATORIO_PAGO: 'recordatorio_pago',
 } as const;
 
 export type TipoNotificacion =
@@ -39,4 +42,13 @@ export const NOTIFICACION_REPOSITORY_PORT = Symbol('NOTIFICACION_REPOSITORY_PORT
 export interface NotificacionRepositoryPort {
   buscarContextoPago(paymentId: number): Promise<ContextoPago | null>;
   guardar(notificacion: NuevaNotificacion): Promise<number>;
+  /** Tandas ACTIVAS con los números de sus participantes y si ya tienen pago en curso. */
+  listarTandasParaRecordatorio(): Promise<TandaParaRecordatorio[]>;
+  /** Para no repetir el mismo aviso: ¿ya se guardó uno de este tipo desde `desde`? */
+  existeNotificacionDesde(
+    idUser: number,
+    idTanda: number,
+    type: TipoNotificacion,
+    desde: Date,
+  ): Promise<boolean>;
 }

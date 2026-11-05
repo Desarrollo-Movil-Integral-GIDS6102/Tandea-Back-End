@@ -15,7 +15,7 @@ import {
   type NotificacionPort,
 } from '../../domain/ports/out/notificacion.port';
 
-interface Aviso {
+export interface Aviso {
   idUser: number;
   idTanda: number;
   type: TipoNotificacion;
@@ -100,7 +100,8 @@ export class NotificacionesService {
     return ctx;
   }
 
-  private async notificar(aviso: Aviso): Promise<void> {
+  /** Guarda el aviso en la bandeja y después intenta el push (un fallo del push no lo pierde). */
+  async notificar(aviso: Aviso): Promise<void> {
     await this.repositorio.guardar({
       idUser: aviso.idUser,
       idTanda: aviso.idTanda,

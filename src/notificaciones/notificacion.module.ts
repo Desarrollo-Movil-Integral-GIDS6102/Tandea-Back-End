@@ -3,9 +3,11 @@ import { DatabaseModule } from '../database/database.module';
 
 // Application
 import { NotificacionesService } from './application/services/notificaciones.service';
+import { RecordatoriosPagoService } from './application/services/recordatorios-pago.service';
 
-// Inbound Adapters (eventos internos)
+// Inbound Adapters (eventos internos y tareas programadas)
 import { PagoEventsListener } from './infrastructure/adapters/in/events/pago-events.listener';
+import { RecordatoriosCron } from './infrastructure/adapters/in/scheduler/recordatorios.cron';
 
 // Outbound Adapters
 import { DrizzleNotificacionRepository } from './infrastructure/adapters/out/database/drizzle-notificacion.repository';
@@ -23,6 +25,7 @@ import { NOTIFICACION_PORT } from './domain/ports/out/notificacion.port';
  *
  * Mapeo de Puertos y Adaptadores:
  *  - Entrada: eventos pago.* ➔ PagoEventsListener ➔ NotificacionesService
+ *  - Entrada: cron diario 9:00 CDMX ➔ RecordatoriosCron ➔ RecordatoriosPagoService (AP-08)
  *  - Salida: NOTIFICACION_REPOSITORY_PORT ➔ DrizzleNotificacionRepository
  *  - Salida: NOTIFICACION_PORT ➔ LogNotificacionAdapter (cambiar a NotificacionFcmAdapter en INT-NOTIF)
  */
@@ -38,8 +41,10 @@ import { NOTIFICACION_PORT } from './domain/ports/out/notificacion.port';
       useClass: LogNotificacionAdapter,
     },
     NotificacionesService,
+    RecordatoriosPagoService,
     PagoEventsListener,
+    RecordatoriosCron,
   ],
-  exports: [NotificacionesService],
+  exports: [NotificacionesService, RecordatoriosPagoService],
 })
 export class NotificacionModule {}
