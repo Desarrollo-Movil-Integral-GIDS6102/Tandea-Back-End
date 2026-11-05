@@ -3,6 +3,7 @@ import { Tanda, TandaStatus, TandaProps } from '../../entities/tanda.entity';
 import type { PeriodicidadTanda } from '../../services/calcular-plan';
 import type { TurnoCalendario } from '../../services/generar-calendario';
 import { NumberRecord } from '../out/number-repository.port';
+import type { TipoMovimiento } from '../out/tanda-repository.port';
 
 export interface CreateTandaCommand {
   name: string;
@@ -84,6 +85,33 @@ export interface CalendarioTanda {
   turnos: TurnoCalendario[];
 }
 
+export interface HistorialQuery {
+  /** Solo el organizador o el admin global pueden filtrar por otro participante. */
+  userId?: number;
+  /** Valor de `nextCursor` de la página anterior. */
+  cursor?: string;
+  limit: number;
+}
+
+export interface MovimientoHistorial {
+  tipo: TipoMovimiento;
+  id: number;
+  idNumber: number;
+  numero: number;
+  usuario: { idUser: number; nombre: string | null } | null;
+  monto: number;
+  transferAmount: number;
+  cashAmount: number;
+  estado: string;
+  fecha: string;
+}
+
+export interface HistorialTanda {
+  items: MovimientoHistorial[];
+  /** null cuando ya no hay más movimientos. */
+  nextCursor: string | null;
+}
+
 export interface JoinTandaCommand {
   inviteCode: string;
   idUser: number;
@@ -108,6 +136,7 @@ export interface TandaUseCasesPort {
   obtenerTandaPorId(idTanda: number, userId: number, role: string): Promise<TandaDetalle>;
   obtenerSeguimiento(idTanda: number, userId: number, role: string): Promise<SeguimientoTanda>;
   obtenerCalendario(idTanda: number, userId: number, role: string): Promise<CalendarioTanda>;
+  obtenerHistorial(idTanda: number, userId: number, role: string, query: HistorialQuery): Promise<HistorialTanda>;
   obtenerPorCodigoInvitacion(inviteCode: string): Promise<TandaConDisponibles>;
   listarTandas(query: ListTandasQuery, userId: number, role: string): Promise<PaginatedTandasResult>;
   actualizarTanda(idTanda: number, command: UpdateTandaCommand, userId: number, role: string): Promise<Tanda>;

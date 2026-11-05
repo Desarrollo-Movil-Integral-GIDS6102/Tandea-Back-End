@@ -18,7 +18,10 @@ import {
   TandaConDisponibles,
   SeguimientoTanda,
   CalendarioTanda,
+  HistorialQuery,
+  HistorialTanda,
 } from '../../domain/ports/in/tanda-use-cases.port';
+import { codificarCursor, decodificarCursor } from '../../domain/services/cursor-historial';
 import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
 import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
 import { sortearNumeros } from '../../domain/services/sortear-numeros';
@@ -229,6 +232,68 @@ export class TandaService implements TandaUseCasesPort {
             nombre: [n.userName, n.userLastName].filter(Boolean).join(' ') || null,
           })),
       }),
+    };
+  }
+
+  /**
+   * Historial de pagos y cobros de la tanda (AP-09), del más reciente al más antiguo.
+   * El organizador y el admin global ven todo (y pueden filtrar por `userId`);
+   * un participante solo ve sus propios movimientos.
+   */
+  async obtenerHistorial(
+    idTanda: number,
+    userId: number,
+    role: string,
+    query: HistorialQuery,
+  ): Promise<HistorialTanda> {
+    const tanda = await this.tandaRepository.findById(idTanda);
+    if (!tanda || !tanda.active) {
+      throw new NotFoundException(`Tanda con id ${idTanda} no encontrada`);
+    }
+
+    const veTodo = tanda.idAdmin === userId || role === 'admin_global';
+    let filtroUsuario = query.userId;
+    if (!veTodo) {
+      const misNumeros = await this.numberRepository.findByUserInTanda(idTanda, userId);
+      if (misNumeros.length === 0) {
+        throw new ForbiddenException('No tienes permisos para visualizar esta tanda');
+      }
+      if (query.userId !== undefined && query.userId !== userId) {
+        throw new ForbiddenException('Solo puedes consultar tu propio historial');
+      }
+      filtroUsuario = userId;
+    }
+
+    const cursor = query.cursor ? decodificarCursor(query.cursor) : undefined;
+    if (cursor === null) {
+      throw new BadRequestException('El parámetro "cursor" no es válido');
+    }
+
+    const filas = await this.tandaRepository.listarMovimientos(idTanda, {
+      idUser: filtroUsuario,
+      cursor,
+      limit: query.limit,
+    });
+    const pagina = filas.slice(0, query.limit);
+    const ultimo = pagina[pagina.length - 1];
+
+    return {
+      items: pagina.map((m) => ({
+        tipo: m.tipo,
+        id: m.id,
+        idNumber: m.idNumber,
+        numero: m.numero,
+        usuario: m.idUser !== null ? { idUser: m.idUser, nombre: m.nombre } : null,
+        monto: m.monto,
+        transferAmount: m.transferAmount,
+        cashAmount: m.cashAmount,
+        estado: m.estado,
+        fecha: m.fecha,
+      })),
+      nextCursor:
+        filas.length > query.limit && ultimo
+          ? codificarCursor({ fecha: ultimo.fecha, tipo: ultimo.tipo, id: ultimo.id })
+          : null,
     };
   }
 

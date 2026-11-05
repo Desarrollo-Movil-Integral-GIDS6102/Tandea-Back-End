@@ -53,6 +53,7 @@ describe('[AP-02] ElegirNumeroService (Caso de uso Elegir Número)', () => {
       updateStatus: vi.fn(),
       softDelete: vi.fn(),
       findAll: vi.fn(),
+      listarMovimientos: vi.fn(),
     };
 
     service = new ElegirNumeroService(mockNumberRepo, mockTandaRepo);
