@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
 import { PagoModule } from './pagos/pago.module';
 import { AuthModule } from './auth/auth.module';
@@ -17,11 +18,13 @@ import { AppService } from './app.service';
  *
  * EventEmitterModule es el bus de eventos internos: los módulos de negocio solo
  * emiten (pago.registrado, pago.confirmado…) y NotificacionModule los escucha,
- * así ningún módulo importa a notificaciones.
+ * así ningún módulo importa a notificaciones. ScheduleModule habilita las
+ * tareas programadas (@Cron), como los recordatorios diarios de pago.
  */
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
     PagoModule,
