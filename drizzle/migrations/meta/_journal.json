@@ -43,6 +43,13 @@
       "when": 1793761000000,
       "tag": "0006_fcm_token",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794093856349,
+      "tag": "0007_payment_status_vencido",
+      "breakpoints": true
     }
   ]
 }

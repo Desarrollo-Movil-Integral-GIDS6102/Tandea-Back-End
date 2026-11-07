@@ -231,6 +231,28 @@ Migración generada con Drizzle Kit en `drizzle/migrations/0002_small_sumo.sql`:
 ALTER TABLE "payment" ADD COLUMN "rejection_reason" text;
 ```
 
+### Migración 0007 — Estado VENCIDO en `payment_status` [SP-3 BD-PAGO]
+Se amplió el enum nativo de PostgreSQL `payment_status` agregando el valor `'VENCIDO'`:
+
+```typescript
+export const paymentStatusEnum = pgEnum('payment_status', [
+  'PENDIENTE',   // falta alguna de las dos confirmaciones
+  'CONFIRMADO',  // confirmed_by_participant AND confirmed_by_admin
+  'RECHAZADO',   // el organizador lo rechazó
+  'VENCIDO',     // superó la fecha límite sin resolverse
+]);
+```
+
+Migración generada con Drizzle Kit en `drizzle/migrations/0007_payment_status_vencido.sql`:
+```sql
+ALTER TYPE "public"."payment_status" ADD VALUE IF NOT EXISTS 'VENCIDO';
+```
+
+> **Aclaración de Impacto**:
+> - Solo se agrega el valor nuevo al tipo enumerado en PostgreSQL.
+> - **Los datos existentes no cambian**: ningún registro de pago existente en la base de datos es modificado.
+> - La lógica de negocio, transiciones y notificaciones del estado vencido corresponden y serán implementadas en la tarjeta `SP-3 [BE-NOTIF]`.
+
 ---
 
 ## 📣 4. Eventos de Dominio Emitidos (`PagoEventsPort`)
