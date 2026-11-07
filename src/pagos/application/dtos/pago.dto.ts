@@ -10,7 +10,7 @@ export const zMetodoPago = z.enum(['efectivo', 'transferencia', 'hibrido'], {
     message: 'metodoPago debe ser "efectivo", "transferencia" o "hibrido"',
   }),
 });
-export const zEstadoPago = z.enum(['PENDIENTE', 'CONFIRMADO', 'RECHAZADO']);
+export const zEstadoPago = z.enum(['PENDIENTE', 'CONFIRMADO', 'RECHAZADO', 'VENCIDO']);
 
 // ─────────────────────────────────────────────
 // Helpers de campos

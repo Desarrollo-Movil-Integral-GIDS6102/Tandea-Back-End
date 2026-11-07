@@ -19,7 +19,7 @@ export interface CrearPagoFactoryDto {
   comprobanteUrl?: string | null;
   confirmedByParticipant?: boolean;
   confirmedByAdmin?: boolean;
-  status?: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO';
+  status?: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO';
   ocrDetectedAmount?: number | null;
   ocrVerified?: boolean;
   fechaPago?: Date;
@@ -77,7 +77,7 @@ export class PagoFactory {
     const confirmedByParticipant = dto.confirmedByParticipant ?? false;
     const confirmedByAdmin = dto.confirmedByAdmin ?? false;
 
-    const status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
+    const status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO' =
       dto.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
 
     return Pago.create({
