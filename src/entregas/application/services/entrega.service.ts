@@ -17,6 +17,10 @@ import type {
   RegistrarEntregaCommand,
   UsuarioEntrega,
 } from '../../domain/ports/in/entrega-use-cases.port';
+import {
+  ENTREGA_EVENTS_PORT,
+  type EntregaEventsPort,
+} from '../../domain/ports/out/entrega-events.port';
 import { STORAGE_PORT, type StoragePort } from '../../../pagos/domain/ports/out/storage.port';
 import { sumarCentavosExactos, toCentavos } from '../../../pagos/domain/utils/moneda.util';
 
@@ -33,6 +37,8 @@ export class EntregaService implements EntregaUseCasesPort {
     private readonly repository: EntregaRepositoryPort,
     @Inject(STORAGE_PORT)
     private readonly storage: StoragePort,
+    @Inject(ENTREGA_EVENTS_PORT)
+    private readonly eventos: EntregaEventsPort,
   ) {}
 
   async registrar(
@@ -83,9 +89,27 @@ export class EntregaService implements EntregaUseCasesPort {
       throw new ConflictException('Este turno ya tiene una entrega registrada');
     }
 
-    // shortcut: solo se registra en el log; emitir entrega.registrada queda para BE-NOTIF
-    this.logger.log(`entrega.registrada payout=${idPayout} tanda=${numero.idTanda}`);
-    return this.buscar(idPayout);
+    const entrega = await this.buscar(idPayout);
+    await this.publicarEntregaRegistrada(entrega, numero.idUser);
+    return entrega;
+  }
+
+  private async publicarEntregaRegistrada(entrega: EntregaRecord, idReceptor: number): Promise<void> {
+    try {
+      await this.eventos.publicarEntregaRegistrada({
+        idPayout: entrega.idPayout,
+        idTanda: entrega.idTanda,
+        nombreTanda: entrega.nombreTanda,
+        idReceptor,
+        numero: entrega.numberValue,
+        totalAmount: entrega.totalAmount,
+      });
+    } catch (error: unknown) {
+      // La entrega ya quedó guardada; un fallo del bus no debe convertirse en error para el cliente
+      this.logger.error(
+        `No se pudo publicar entrega.registrada del payout ${entrega.idPayout}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async obtener(idPayout: number, usuario: UsuarioEntrega): Promise<EntregaRecord> {

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../../../../../database/tandea.schema';
 import {
   ContextoPago,
+  NotificacionBandeja,
   NotificacionRepositoryPort,
   NuevaNotificacion,
   TipoNotificacion,
@@ -151,5 +152,45 @@ export class DrizzleNotificacionRepository implements NotificacionRepositoryPort
       .limit(1);
 
     return row !== undefined;
+  }
+
+  async listarDeUsuario(idUser: number, limite: number): Promise<NotificacionBandeja[]> {
+    return this.db
+      .select({
+        idNotification: notificationTable.idNotification,
+        idTanda: notificationTable.idTanda,
+        nombreTanda: tandaTable.name,
+        type: notificationTable.type,
+        message: notificationTable.message,
+        isRead: notificationTable.isRead,
+        createdAt: notificationTable.createdAt,
+      })
+      .from(notificationTable)
+      .leftJoin(tandaTable, eq(tandaTable.idTanda, notificationTable.idTanda))
+      .where(eq(notificationTable.idUser, idUser))
+      .orderBy(desc(notificationTable.createdAt), desc(notificationTable.idNotification))
+      .limit(limite);
+  }
+
+  async contarNoLeidas(idUser: number): Promise<number> {
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(notificationTable)
+      .where(and(eq(notificationTable.idUser, idUser), eq(notificationTable.isRead, false)));
+    return row?.total ?? 0;
+  }
+
+  async marcarLeida(idNotification: number, idUser: number): Promise<boolean> {
+    const filas = await this.db
+      .update(notificationTable)
+      .set({ isRead: true })
+      .where(
+        and(
+          eq(notificationTable.idNotification, idNotification),
+          eq(notificationTable.idUser, idUser),
+        ),
+      )
+      .returning({ idNotification: notificationTable.idNotification });
+    return filas.length > 0;
   }
 }

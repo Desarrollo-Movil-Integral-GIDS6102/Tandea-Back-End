@@ -79,7 +79,9 @@ describe.skipIf(!testDbUrl)('Flujo completo de una tanda (Integración)', () => 
     };
     tandas = new TandaService(tandaRepo, tandaRepo);
     pagos = new PagoService(new DrizzlePagoRepository(db), storage, ocr as never, eventos);
-    entregas = new EntregaService(new DrizzleEntregaRepository(db), storage);
+    entregas = new EntregaService(new DrizzleEntregaRepository(db), storage, {
+      publicarEntregaRegistrada: vi.fn(),
+    });
 
     const [rol] = await db.select().from(roleTable).where(eq(roleTable.nameRole, 'usuario'));
     organizador = await crearUsuario(rol.idRole, 'organizador');
@@ -97,7 +99,8 @@ describe.skipIf(!testDbUrl)('Flujo completo de una tanda (Integración)', () => 
   it('crea la tanda con número muerto #0 y la fecha final con el periodo extra', async () => {
     const tanda = await tandas.crearTanda({
       name: 'Tanda integración',
-      startDate: '2026-11-01',
+      // En el pasado para que el turno #0 (sin pagos) ya haya terminado al correr la prueba
+      startDate: '2026-10-01',
       contributionAmount: 100,
       numParticipants: 3,
       periodicity: 'quincenal',
@@ -106,7 +109,7 @@ describe.skipIf(!testDbUrl)('Flujo completo de una tanda (Integración)', () => 
     });
     idTanda = tanda.idTanda!;
 
-    expect(tanda.endDate).toBe('2026-12-16');
+    expect(tanda.endDate).toBe('2026-11-15');
     expect((await numeroDe(0)).isDeadNumber).toBe(true);
   });
 

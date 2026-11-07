@@ -5,10 +5,13 @@ import {
   type NotificacionRepositoryPort,
 } from '../../domain/ports/out/notificacion-repository.port';
 import {
+  seleccionarCobrosProximos,
   seleccionarRecordatorios,
+  seleccionarVencidos,
+  type CobroProximo,
   type RecordatorioPago,
 } from '../../domain/services/recordatorios-pago';
-import { NotificacionesService } from './notificaciones.service';
+import { NotificacionesService, type Aviso } from './notificaciones.service';
 
 export const ZONA_HORARIA = 'America/Mexico_City';
 const DIAS_ANTES_POR_DEFECTO = 1;
@@ -86,6 +89,78 @@ export class RecordatoriosPagoService {
     );
     return resultado;
   }
+
+  /**
+   * Mismo cron: avisa del pago que acaba de vencer (salió de la gracia) y al
+   * dueño del número que cobra mañana. Reutiliza `generarCalendario`.
+   */
+  async enviarAvisosDeTurno(ahora: Date = new Date()): Promise<ResultadoAvisosTurno> {
+    const hoy = fechaLocal(ahora);
+    const inicioDelDia = inicioDelDiaLocal(hoy);
+    const resultado: ResultadoAvisosTurno = { vencidos: 0, cobrosProximos: 0, omitidosPorDuplicado: 0 };
+
+    for (const tanda of await this.repositorio.listarTandasParaRecordatorio()) {
+      let avisos: Aviso[];
+      try {
+        avisos = [
+          ...seleccionarVencidos(tanda, hoy).map(avisoVencido),
+          ...seleccionarCobrosProximos(tanda, hoy).map(avisoCobroProximo),
+        ];
+      } catch (error: unknown) {
+        this.logger.warn(
+          `No se pudo calcular el calendario de la tanda ${tanda.idTanda}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+
+      for (const aviso of avisos) {
+        if (await this.repositorio.existeNotificacionDesde(aviso.idUser, aviso.idTanda, aviso.type, inicioDelDia)) {
+          resultado.omitidosPorDuplicado++;
+          continue;
+        }
+        await this.notificaciones.notificar(aviso);
+        if (aviso.type === TIPO_NOTIFICACION.PAGO_VENCIDO) resultado.vencidos++;
+        else resultado.cobrosProximos++;
+      }
+    }
+
+    this.logger.log(
+      `Avisos de turno (${hoy}): ${resultado.vencidos} vencidos, ${resultado.cobrosProximos} cobros mañana, ${resultado.omitidosPorDuplicado} ya avisados hoy.`,
+    );
+    return resultado;
+  }
+}
+
+export interface ResultadoAvisosTurno {
+  vencidos: number;
+  cobrosProximos: number;
+  omitidosPorDuplicado: number;
+}
+
+const formatoMxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+
+function avisoVencido(r: RecordatorioPago): Aviso {
+  const numeros =
+    r.numeros.length === 1 ? `del número ${r.numeros[0]}` : `de los números ${r.numeros.join(', ')}`;
+  return {
+    idUser: r.idUser,
+    idTanda: r.idTanda,
+    type: TIPO_NOTIFICACION.PAGO_VENCIDO,
+    titulo: 'Pago vencido',
+    mensaje: `Tu pago de ${formatoMxn.format(r.monto)} ${numeros} en la tanda "${r.nombreTanda}" venció. Regístralo lo antes posible.`,
+    route: `/tandas/detalle/${r.idTanda}`,
+  };
+}
+
+function avisoCobroProximo(c: CobroProximo): Aviso {
+  return {
+    idUser: c.idUser,
+    idTanda: c.idTanda,
+    type: TIPO_NOTIFICACION.TURNO_COBRO_PROXIMO,
+    titulo: 'Mañana te toca cobrar',
+    mensaje: `Mañana cobras ${formatoMxn.format(c.monto)} con el número ${c.numero} en la tanda "${c.nombreTanda}".`,
+    route: `/tandas/detalle/${c.idTanda}`,
+  };
 }
 
 export function mensajeRecordatorio(r: RecordatorioPago): string {

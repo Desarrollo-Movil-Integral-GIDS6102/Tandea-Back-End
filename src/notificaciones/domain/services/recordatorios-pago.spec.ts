@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  seleccionarCobrosProximos,
   seleccionarRecordatorios,
+  seleccionarVencidos,
   turnoEnCobro,
   type TandaParaRecordatorio,
 } from './recordatorios-pago';
@@ -89,5 +91,38 @@ describe('seleccionarRecordatorios', () => {
 
   it('con diasAntes = 0 avisa el mismo día de la fecha límite', () => {
     expect(seleccionarRecordatorios(tanda(), '2026-11-11', 0)).toHaveLength(2);
+  });
+});
+
+describe('seleccionarVencidos', () => {
+  it('el día siguiente a la fecha límite avisa a quien no pagó', () => {
+    // Turno 1: límite 04-nov, así que el 05-nov ya venció
+    expect(seleccionarVencidos(tanda(), '2026-11-05')).toEqual([
+      expect.objectContaining({ idUser: 7, numeros: [1], fechaLimite: '2026-11-04', diasRestantes: -1 }),
+      expect.objectContaining({ idUser: 9, numeros: [3], fechaLimite: '2026-11-04', diasRestantes: -1 }),
+    ]);
+  });
+
+  it('solo avisa una vez: dentro de la gracia o días después no hay aviso', () => {
+    expect(seleccionarVencidos(tanda(), '2026-11-04')).toEqual([]);
+    expect(seleccionarVencidos(tanda(), '2026-11-06')).toEqual([]);
+  });
+
+  it('el turno #0 del número muerto nunca vence', () => {
+    // #0 cobra el 02-nov con límite 04-nov, pero no genera pagos
+    expect(seleccionarVencidos(tanda({ tieneNumeroMuerto: true }), '2026-11-05')).toEqual([]);
+  });
+});
+
+describe('seleccionarCobrosProximos', () => {
+  it('avisa al dueño del número que cobra mañana', () => {
+    expect(seleccionarCobrosProximos(tanda(), '2026-11-08')).toEqual([
+      { idUser: 8, idTanda: 3, nombreTanda: 'Tanda de la oficina', numero: 2, fechaCobro: '2026-11-09', monto: 451.5 },
+    ]);
+  });
+
+  it('no avisa por el turno #0 del número muerto ni en días sin cobro', () => {
+    expect(seleccionarCobrosProximos(tanda({ tieneNumeroMuerto: true }), '2026-11-01')).toEqual([]);
+    expect(seleccionarCobrosProximos(tanda(), '2026-11-10')).toEqual([]);
   });
 });
