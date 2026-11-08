@@ -2,8 +2,8 @@
 
 Documentación técnica correspondiente a la tarjeta **SP-3-[BD-NOTIF]**, desarrollada bajo **Arquitectura Hexagonal** sobre NestJS, Fastify, Drizzle ORM y PostgreSQL.
 
-> [!IMPORTANT]
-> **Alcance de la tarjeta**: Esta especificación cubre únicamente la definición de esquema de persistencia (columna `fcm_token` en la tabla `user` y validación del índice en `notification`). **NO incluye endpoints REST, adaptadores de Firebase ni servicios de envío de notificaciones**, los cuales serán abordados en tarjetas subsecuentes del módulo de notificaciones.
+> [!NOTE]
+> Las primeras secciones cubren el esquema (SP-3-[BD-NOTIF]). Los endpoints, eventos y avisos programados están en **Endpoints y avisos del módulo**, al final.
 
 ---
 
@@ -104,4 +104,56 @@ npm run test
 
 # Pruebas de integración con base de datos local
 TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/tandea_dev" npx vitest run test/bd-notif-fcm-token-index.spec.ts
+```
+
+---
+
+## 🌐 Endpoints y avisos del módulo
+
+### Endpoints (todos con JWT)
+
+| Método | Ruta | Qué hace |
+| :--- | :--- | :--- |
+| `GET` | `/notificaciones` | Bandeja del usuario (últimas 100, de la más reciente a la más antigua) y `noLeidas`. |
+| `PATCH` | `/notificaciones/:id/leida` | Marca como leída una notificación propia; una ajena o inexistente responde `404`. |
+| `PATCH` | `/users/me/fcm-token` | Guarda el token FCM del dispositivo (`fcmToken`). |
+
+Respuesta de `GET /notificaciones`:
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "noLeidas": 1,
+    "notificaciones": [
+      { "idNotification": 5, "idTanda": 3, "nombreTanda": "Oficina", "type": "pago_confirmado",
+        "message": "Tu pago del número 4 ...", "isRead": false, "createdAt": "2026-11-07T15:00:00.000Z" }
+    ]
+  }
+}
+```
+
+### Avisos que se generan
+
+Cada aviso se guarda en `notification` y luego se intenta el push por FCM (`data.type` y `data.route` para que la app navegue). Si el push falla, el aviso queda en la bandeja.
+
+| `type` | Origen | Para quién | `data.route` |
+| :--- | :--- | :--- | :--- |
+| `pago_registrado` | evento `pago.registrado` | Organizador | `/pagos/:id/revisar` |
+| `pago_confirmado` | evento `pago.confirmado` | Participante | `/tandas/detalle/:id` |
+| `pago_rechazado` | evento `pago.rechazado` | Participante | `/tandas/detalle/:id` |
+| `entrega_registrada` | evento `entrega.registrada` | Quien cobra | `/entregas/:id` |
+| `recordatorio_pago` | cron 9:00 CDMX (AP-08) | Quien no ha pagado, `RECORDATORIO_DIAS_ANTES` días antes de la fecha límite | `/tandas/detalle/:id` |
+| `pago_vencido` | cron 9:00 CDMX | Quien no pagó, el día siguiente a la fecha límite (cobro + gracia) | `/tandas/detalle/:id` |
+| `turno_cobro_proximo` | cron 9:00 CDMX | Dueño del número que cobra mañana | `/tandas/detalle/:id` |
+
+Los avisos del cron usan `generarCalendario` y no se repiten el mismo día. "Vencido" no se guarda como estado en BD: igual que el seguimiento, se deriva de que no exista un pago.
+
+### Pruebas
+
+```bash
+npx vitest run src/notificaciones
+
+# Integración: registrar un pago genera la fila en notification y llama al push (PostgreSQL local)
+TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/tandea_dev" npm run test:e2e -- test/notificacion-pago-registrado.e2e-spec.ts
 ```

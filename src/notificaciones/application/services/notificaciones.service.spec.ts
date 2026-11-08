@@ -120,4 +120,25 @@ describe('NotificacionesService', () => {
     ).resolves.toBeUndefined();
     expect(repositorio.guardar).toHaveBeenCalledTimes(1);
   });
+
+  it('entrega.registrada: avisa a quien cobra con la ruta para confirmar', async () => {
+    await service.alRegistrarEntrega({
+      idPayout: 21,
+      idTanda: ID_TANDA,
+      nombreTanda: 'Tanda de la oficina',
+      idReceptor: ID_PARTICIPANTE,
+      numero: 4,
+      totalAmount: 1500,
+    });
+
+    expect(repositorio.guardar).toHaveBeenCalledWith(
+      expect.objectContaining({ idUser: ID_PARTICIPANTE, idTanda: ID_TANDA, type: 'entrega_registrada' }),
+    );
+    expect(push.enviar).toHaveBeenCalledWith(
+      ID_PARTICIPANTE,
+      '¿Recibiste tu dinero?',
+      expect.stringContaining('$1,500.00'),
+      { type: 'entrega_registrada', route: '/entregas/21' },
+    );
+  });
 });

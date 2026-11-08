@@ -120,6 +120,7 @@ describe('Adaptador de Infraestructura: NotificacionFcmAdapter y PATCH /users/me
         title: 'Recordatorio de pago',
         body: 'Tu aporte de la ronda 2 vence mañana',
       },
+      android: { priority: 'high', notification: { channelId: 'tandea_avisos' } },
     });
   });
 

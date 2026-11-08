@@ -82,6 +82,37 @@ describe('RecordatoriosPagoService', () => {
 
     expect(resultado.enviados).toBe(2);
   });
+
+  describe('enviarAvisosDeTurno', () => {
+    it('avisa a quien no pagó el día siguiente a la fecha límite', async () => {
+      // 05-nov 9:00 CDMX: el turno 1 (límite 04-nov) acaba de vencer
+      const resultado = await service.enviarAvisosDeTurno(new Date('2026-11-05T15:00:00.000Z'));
+
+      expect(resultado).toEqual({ vencidos: 2, cobrosProximos: 0, omitidosPorDuplicado: 0 });
+      expect(notificaciones.notificar).toHaveBeenCalledWith(
+        expect.objectContaining({ idUser: 7, type: 'pago_vencido', titulo: 'Pago vencido' }),
+      );
+    });
+
+    it('avisa al dueño del número que cobra mañana', async () => {
+      // 08-nov: el turno 2 (número 2, usuario 8) cobra el 09-nov
+      const resultado = await service.enviarAvisosDeTurno(new Date('2026-11-08T15:00:00.000Z'));
+
+      expect(resultado).toEqual({ vencidos: 0, cobrosProximos: 1, omitidosPorDuplicado: 0 });
+      expect(notificaciones.notificar).toHaveBeenCalledWith(
+        expect.objectContaining({ idUser: 8, type: 'turno_cobro_proximo' }),
+      );
+    });
+
+    it('no repite un aviso ya enviado hoy', async () => {
+      repositorio.existeNotificacionDesde.mockResolvedValue(true);
+
+      const resultado = await service.enviarAvisosDeTurno(new Date('2026-11-05T15:00:00.000Z'));
+
+      expect(resultado).toEqual({ vencidos: 0, cobrosProximos: 0, omitidosPorDuplicado: 2 });
+      expect(notificaciones.notificar).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('mensajeRecordatorio', () => {

@@ -120,6 +120,8 @@ export class NotificacionFcmAdapter implements NotificacionPort {
           body: cuerpo,
         },
         ...(data ? { data } : {}),
+        // Prioridad alta: con la normal Android retrasa el aviso minutos cuando el celular está en reposo
+        android: { priority: 'high', notification: { channelId: 'tandea_avisos' } },
       });
       this.logger.log(
         `Notificación FCM enviada exitosamente al usuario ${userId}`,

@@ -4,6 +4,7 @@ import type {
   PagoRechazadoEvent,
   PagoRegistradoEvent,
 } from '../../../pagos/domain/ports/out/pago-events.port';
+import type { EntregaRegistradaEvent } from '../../../entregas/domain/ports/out/entrega-events.port';
 import {
   NOTIFICACION_REPOSITORY_PORT,
   TIPO_NOTIFICACION,
@@ -89,6 +90,21 @@ export class NotificacionesService {
       titulo: 'Pago rechazado',
       mensaje: `Tu pago del número ${ctx.numero} en la tanda "${ctx.nombreTanda}" fue rechazado: ${evento.motivo}`,
       route: `/tandas/detalle/${ctx.idTanda}`,
+    });
+  }
+
+  /** entrega.registrada → avisa a quien cobra que confirme que recibió el dinero (AP-07). */
+  async alRegistrarEntrega(evento: EntregaRegistradaEvent): Promise<void> {
+    const total = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(
+      evento.totalAmount,
+    );
+    await this.notificar({
+      idUser: evento.idReceptor,
+      idTanda: evento.idTanda,
+      type: TIPO_NOTIFICACION.ENTREGA_REGISTRADA,
+      titulo: '¿Recibiste tu dinero?',
+      mensaje: `El organizador registró la entrega de ${total} de tu número ${evento.numero} en la tanda "${evento.nombreTanda}". Confirma que lo recibiste.`,
+      route: `/entregas/${evento.idPayout}`,
     });
   }
 

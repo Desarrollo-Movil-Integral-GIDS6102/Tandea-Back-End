@@ -6,10 +6,13 @@ import { AuthModule } from '../auth/auth.module';
 import { NotificacionesService } from './application/services/notificaciones.service';
 import { RecordatoriosPagoService } from './application/services/recordatorios-pago.service';
 import { FcmTokenService } from './application/services/fcm-token.service';
+import { BandejaService } from './application/services/bandeja.service';
 
 // Inbound Adapters (HTTP, eventos internos y tareas programadas)
 import { UsersFcmController } from './infrastructure/adapters/in/http/controllers/users-fcm.controller';
+import { NotificacionesController } from './infrastructure/adapters/in/http/controllers/notificaciones.controller';
 import { PagoEventsListener } from './infrastructure/adapters/in/events/pago-events.listener';
+import { EntregaEventsListener } from './infrastructure/adapters/in/events/entrega-events.listener';
 import { RecordatoriosCron } from './infrastructure/adapters/in/scheduler/recordatorios.cron';
 
 // Outbound Adapters
@@ -22,13 +25,16 @@ import { NOTIFICACION_REPOSITORY_PORT } from './domain/ports/out/notificacion-re
 import { NOTIFICACION_PORT } from './domain/ports/out/notificacion.port';
 import { FCM_TOKEN_REPOSITORY_PORT } from './domain/ports/out/fcm-token-repository.port';
 import { FCM_TOKEN_USE_CASE_PORT } from './domain/ports/in/fcm-token-use-case.port';
+import { BANDEJA_USE_CASE_PORT } from './domain/ports/in/bandeja-use-case.port';
 
 /**
  * NotificacionModule — Escucha los eventos internos y avisa a los usuarios.
  *
  * Mapeo de Puertos y Adaptadores:
  *  - Entrada HTTP: PATCH /users/me/fcm-token ➔ UsersFcmController ➔ FcmTokenService
+ *  - Entrada HTTP: GET /notificaciones, PATCH /notificaciones/:id/leida ➔ NotificacionesController ➔ BandejaService
  *  - Entrada: eventos pago.* ➔ PagoEventsListener ➔ NotificacionesService
+ *  - Entrada: evento entrega.registrada ➔ EntregaEventsListener ➔ NotificacionesService
  *  - Entrada: cron diario 9:00 CDMX ➔ RecordatoriosCron ➔ RecordatoriosPagoService (AP-08)
  *  - Salida: NOTIFICACION_REPOSITORY_PORT ➔ DrizzleNotificacionRepository
  *  - Salida: FCM_TOKEN_REPOSITORY_PORT ➔ DrizzleFcmTokenRepository
@@ -36,8 +42,12 @@ import { FCM_TOKEN_USE_CASE_PORT } from './domain/ports/in/fcm-token-use-case.po
  */
 @Module({
   imports: [DatabaseModule, AuthModule],
-  controllers: [UsersFcmController],
+  controllers: [UsersFcmController, NotificacionesController],
   providers: [
+    {
+      provide: BANDEJA_USE_CASE_PORT,
+      useClass: BandejaService,
+    },
     {
       provide: NOTIFICACION_REPOSITORY_PORT,
       useClass: DrizzleNotificacionRepository,
@@ -60,6 +70,7 @@ import { FCM_TOKEN_USE_CASE_PORT } from './domain/ports/in/fcm-token-use-case.po
     NotificacionFcmAdapter,
     DrizzleFcmTokenRepository,
     PagoEventsListener,
+    EntregaEventsListener,
     RecordatoriosCron,
   ],
   exports: [
