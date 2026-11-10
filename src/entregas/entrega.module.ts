@@ -7,6 +7,8 @@ import { EntregaService } from './application/services/entrega.service';
 import { DrizzleEntregaRepository } from './infrastructure/adapters/out/database/drizzle-entrega.repository';
 import { ENTREGA_REPOSITORY_PORT } from './domain/ports/out/entrega-repository.port';
 import { ENTREGA_USE_CASES_PORT } from './domain/ports/in/entrega-use-cases.port';
+import { ENTREGA_EVENTS_PORT } from './domain/ports/out/entrega-events.port';
+import { EventEmitterEntregaEventsAdapter } from './infrastructure/adapters/out/events/event-emitter-entrega-events.adapter';
 
 @Module({
   imports: [DatabaseModule, AuthModule, PagoModule],
@@ -14,6 +16,7 @@ import { ENTREGA_USE_CASES_PORT } from './domain/ports/in/entrega-use-cases.port
   providers: [
     { provide: ENTREGA_REPOSITORY_PORT, useClass: DrizzleEntregaRepository },
     { provide: ENTREGA_USE_CASES_PORT, useClass: EntregaService },
+    { provide: ENTREGA_EVENTS_PORT, useClass: EventEmitterEntregaEventsAdapter },
   ],
 })
 export class EntregaModule {}

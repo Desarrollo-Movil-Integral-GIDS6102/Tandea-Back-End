@@ -50,6 +50,7 @@ export const paymentStatusEnum = pgEnum('payment_status', [
   'PENDIENTE', // falta alguna de las dos confirmaciones
   'CONFIRMADO', // confirmed_by_participant AND confirmed_by_admin
   'RECHAZADO', // el organizador lo rechazó
+  'VENCIDO', // superó la fecha límite sin resolverse
 ]);
 
 export const payoutStatusEnum = pgEnum('payout_status', [
@@ -110,6 +111,7 @@ export const userTable = pgTable(
       .notNull()
       .references(() => roleTable.idRole),
     active: boolean('active').notNull().default(true), // false = suspendido
+    fcmToken: text('fcm_token'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),

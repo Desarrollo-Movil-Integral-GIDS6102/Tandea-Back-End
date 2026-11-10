@@ -18,7 +18,7 @@ import { DrizzleAuthUserRepository } from './infrastructure/adapters/out/databas
 
 // Strategies & Guards
 import { LocalStrategy } from './infrastructure/adapters/in/http/strategies/local.strategy';
-import { JwtStrategy } from './infrastructure/adapters/in/http/strategies/jwt.strategy';
+import { JwtStrategy, obtenerJwtSecret } from './infrastructure/adapters/in/http/strategies/jwt.strategy';
 import { JwtAuthGuard } from './infrastructure/adapters/in/http/guards/jwt-auth.guard';
 import { RolesGuard } from './infrastructure/adapters/in/http/guards/roles.guard';
 import { LocalAuthGuard } from './infrastructure/adapters/in/http/guards/local-auth.guard';
@@ -31,7 +31,7 @@ import { BrevoMailAdapter } from '../common/infrastructure/adapters/out/mail/bre
     DatabaseModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'tandea_secret_key_sprint1',
+      secret: obtenerJwtSecret(),
       signOptions: { expiresIn: '30d' },
     }),
   ],

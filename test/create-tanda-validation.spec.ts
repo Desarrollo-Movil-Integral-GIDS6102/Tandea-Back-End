@@ -47,6 +47,7 @@ describe('[BE-TANDA] Validación mínima de participantes (QA-03)', () => {
     updateStatus: mockUpdateStatus,
     softDelete: mockSoftDelete,
     findAll: mockFindAll,
+    listarMovimientos: vi.fn(),
   };
 
   const mockNumberRepo: NumberRepositoryPort = {

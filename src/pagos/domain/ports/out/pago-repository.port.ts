@@ -1,4 +1,5 @@
 import { Pago } from '../../entities/Pago';
+import type { PeriodicidadTanda } from '../../../../tandas/domain/services/calcular-plan';
 
 /**
  * Datos del número (turno) necesarios para registrar un pago.
@@ -13,6 +14,10 @@ export interface NumeroConCuota {
     contributionAmount: number;
     idAdmin?: number;
     status: string;
+    /** Para saber si hoy cae en el turno #0, donde no se aceptan pagos. */
+    startDate?: string;
+    periodicity?: PeriodicidadTanda;
+    hasDeadNumber?: boolean;
   } | null;
 }
 

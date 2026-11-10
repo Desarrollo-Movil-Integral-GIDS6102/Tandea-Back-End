@@ -16,13 +16,23 @@ export interface AuthenticatedUser {
   role: string;
 }
 
+/** En producción JWT_SECRET es obligatorio: sin él cualquiera podría forjar tokens. */
+export function obtenerJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET no está definido; el servidor no puede iniciar en producción');
+  }
+  return 'tandea_secret_key_sprint1';
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET ?? 'tandea_secret_key_sprint1',
+      secretOrKey: obtenerJwtSecret(),
     });
   }
 

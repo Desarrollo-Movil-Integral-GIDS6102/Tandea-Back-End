@@ -29,6 +29,7 @@ import {
   zUpdateTandaStatus,
 } from '../../../../application/dtos/update-tanda.dto';
 import { zQueryTandas } from '../../../../application/dtos/query-tandas.dto';
+import { zQueryHistorial } from '../../../../application/dtos/query-historial.dto';
 
 @Controller('tandas')
 @UseGuards(JwtAuthGuard)
@@ -191,6 +192,38 @@ export class TandaController {
     return {
       statusCode: HttpStatus.OK,
       data: await this.tandaService.obtenerSeguimiento(id, user.idUser, user.role),
+    };
+  }
+
+  /**
+   * GET /tandas/:id/calendario
+   * Calendario de turnos con fecha de cobro y monto a esperar (AP-06).
+   */
+  @Get(':id/calendario')
+  async obtenerCalendario(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.tandaService.obtenerCalendario(id, user.idUser, user.role),
+    };
+  }
+
+  /**
+   * GET /tandas/:id/historial?userId=&cursor=&limit=
+   * Pagos y cobros de la tanda, del más reciente al más antiguo, con paginación por cursor (AP-09).
+   */
+  @Get(':id/historial')
+  async obtenerHistorial(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: unknown,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const dto = zQueryHistorial.parse(query);
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.tandaService.obtenerHistorial(id, user.idUser, user.role, dto),
     };
   }
 

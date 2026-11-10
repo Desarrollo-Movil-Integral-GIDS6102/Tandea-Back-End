@@ -110,6 +110,7 @@ El sistema separa estrictamente la lógica del negocio de los detalles técnicos
 
 ```text
 Tandea-Back-End/
+├── docs/                                   # Documentación técnica de arquitectura y módulos (docs/notificaciones.md, etc.)
 ├── drizzle/                                # Migraciones SQL generadas por Drizzle Kit
 ├── src/
 │   ├── common/                             # Utilidades y componentes transversales

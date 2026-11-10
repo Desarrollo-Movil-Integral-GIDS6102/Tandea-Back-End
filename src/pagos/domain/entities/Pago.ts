@@ -13,9 +13,11 @@ export type EstadoPago =
   | 'PENDIENTE'
   | 'CONFIRMADO'
   | 'RECHAZADO'
+  | 'VENCIDO'
   | 'pendiente'
   | 'confirmado'
   | 'rechazado'
+  | 'vencido'
   | 'confirmado_parcial';
 
 export interface PagoProps {
@@ -26,7 +28,7 @@ export interface PagoProps {
   cashAmount: number;
   totalAmount: number;
   metodoPago: MetodoPago;
-  status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO';
+  status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO';
   confirmedByParticipant: boolean;
   confirmedByAdmin: boolean;
   evidenceUrl?: string | null;
@@ -53,7 +55,7 @@ export type CreatePagoProps = {
   cashAmount?: number;
   totalAmount?: number;
   metodoPago: MetodoPago;
-  status?: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO';
+  status?: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO';
   confirmedByParticipant?: boolean;
   confirmedByAdmin?: boolean;
   evidenceUrl?: string | null;
@@ -92,7 +94,7 @@ export class Pago {
   public static reconstitute(props: PagoProps): Pago {
     return new Pago({
       ...props,
-      status: (props.status?.toUpperCase() as 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO') ?? 'PENDIENTE',
+      status: (props.status?.toUpperCase() as 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO') ?? 'PENDIENTE',
       confirmedByParticipant: Boolean(props.confirmedByParticipant),
       confirmedByAdmin: Boolean(props.confirmedByAdmin),
       evidenceUrl: props.evidenceUrl ?? null,
@@ -117,7 +119,7 @@ export class Pago {
     const confirmedByParticipant = props.confirmedByParticipant ?? false;
     const confirmedByAdmin = props.confirmedByAdmin ?? false;
 
-    let status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' =
+    let status: 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO' =
       props.status ?? (confirmedByParticipant && confirmedByAdmin ? 'CONFIRMADO' : 'PENDIENTE');
 
     return new Pago({
@@ -176,7 +178,7 @@ export class Pago {
     return this.props.metodoPago;
   }
 
-  get status(): 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' {
+  get status(): 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO' | 'VENCIDO' {
     return this.props.status;
   }
 
@@ -232,6 +234,9 @@ export class Pago {
     }
     if (this.props.status === 'RECHAZADO') {
       return 'rechazado';
+    }
+    if (this.props.status === 'VENCIDO') {
+      return 'vencido';
     }
     if (this.props.confirmedByAdmin) {
       return 'confirmado_parcial';

@@ -29,6 +29,7 @@ const evidencia = { buffer: Buffer.from('x'), mimetype: 'image/jpeg', nombreOrig
 describe('EntregaService', () => {
   let repo: { [K in keyof EntregaRepositoryPort]: ReturnType<typeof vi.fn> };
   let storage: { subir: ReturnType<typeof vi.fn> };
+  let eventos: { publicarEntregaRegistrada: ReturnType<typeof vi.fn> };
   let service: EntregaService;
 
   const registrar = (usuario = ORGANIZADOR, montos = { transferAmount: 300, cashAmount: 0 }) =>
@@ -44,7 +45,8 @@ describe('EntregaService', () => {
       crearDisputa: vi.fn(),
     };
     storage = { subir: vi.fn().mockResolvedValue('https://img/e.jpg') };
-    service = new EntregaService(repo as unknown as EntregaRepositoryPort, storage);
+    eventos = { publicarEntregaRegistrada: vi.fn().mockResolvedValue(undefined) };
+    service = new EntregaService(repo as unknown as EntregaRepositoryPort, storage, eventos);
   });
 
   it('el organizador registra la entrega del turno vigente con su evidencia', async () => {
@@ -57,6 +59,14 @@ describe('EntregaService', () => {
       totalAmount: 300,
       evidenceUrl: 'https://img/e.jpg',
     });
+    expect(eventos.publicarEntregaRegistrada).toHaveBeenCalledWith(
+      expect.objectContaining({ idPayout: 1, idTanda: 7, idReceptor: 30 }),
+    );
+  });
+
+  it('si el bus de eventos falla, la entrega igual queda registrada', async () => {
+    eventos.publicarEntregaRegistrada.mockRejectedValue(new Error('bus caído'));
+    await expect(registrar()).resolves.toMatchObject({ idPayout: 1 });
   });
 
   it('solo el organizador puede registrar', async () => {
