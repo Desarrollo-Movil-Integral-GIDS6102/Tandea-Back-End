@@ -45,7 +45,7 @@ describe('[BE-CAL] generarCalendario (AP-06)', () => {
   });
 
   describe('con número muerto', () => {
-    it('el primer turno es el #0 y no genera pagos', () => {
+    it('el primer turno es el #0 y también genera pagos', () => {
       const calendario = generarCalendario(base({ tieneNumeroMuerto: true }));
 
       expect(calendario.map((t) => t.numero)).toEqual([0, 1, 2, 3]);
@@ -53,13 +53,13 @@ describe('[BE-CAL] generarCalendario (AP-06)', () => {
         esNumeroMuerto: true,
         usuario: null,
         fechaCobro: '2026-11-01',
-        montoAEsperar: 0,
+        montoAEsperar: 1500,
       });
       expect(calendario[1]).toMatchObject({ numero: 1, fechaCobro: '2026-11-08', montoAEsperar: 1500 });
     });
 
-    it('los pagos inician al terminar el turno #0', () => {
-      expect(fechaInicioPagos('2026-11-01', 'semanal', true)).toBe('2026-11-08');
+    it('los pagos inician desde la fecha de inicio, también con turno #0', () => {
+      expect(fechaInicioPagos('2026-11-01', 'semanal', true)).toBe('2026-11-01');
       expect(fechaInicioPagos('2026-11-01', 'semanal', false)).toBe('2026-11-01');
     });
   });

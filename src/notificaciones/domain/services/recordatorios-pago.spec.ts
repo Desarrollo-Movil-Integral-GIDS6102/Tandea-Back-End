@@ -39,12 +39,11 @@ describe('turnoEnCobro', () => {
     });
   });
 
-  it('salta el turno #0 del número muerto porque no genera pagos', () => {
+  it('el turno #0 del número muerto también está en cobro', () => {
     const conMuerto = tanda({ tieneNumeroMuerto: true });
-    // #0 cobra el 02-nov; el primer turno con pagos (#1) cobra el 09-nov
     expect(turnoEnCobro(conMuerto, '2026-11-02')).toMatchObject({
-      turno: { numero: 1, fechaCobro: '2026-11-09' },
-      fechaLimite: '2026-11-11',
+      turno: { numero: 0, fechaCobro: '2026-11-02' },
+      fechaLimite: '2026-11-04',
     });
   });
 
@@ -108,9 +107,12 @@ describe('seleccionarVencidos', () => {
     expect(seleccionarVencidos(tanda(), '2026-11-06')).toEqual([]);
   });
 
-  it('el turno #0 del número muerto nunca vence', () => {
-    // #0 cobra el 02-nov con límite 04-nov, pero no genera pagos
-    expect(seleccionarVencidos(tanda({ tieneNumeroMuerto: true }), '2026-11-05')).toEqual([]);
+  it('el turno #0 del número muerto también vence si no pagaron', () => {
+    // #0 cobra el 02-nov con límite 04-nov
+    expect(seleccionarVencidos(tanda({ tieneNumeroMuerto: true }), '2026-11-05')).toEqual([
+      expect.objectContaining({ idUser: 7, fechaLimite: '2026-11-04', diasRestantes: -1 }),
+      expect.objectContaining({ idUser: 9, fechaLimite: '2026-11-04', diasRestantes: -1 }),
+    ]);
   });
 });
 

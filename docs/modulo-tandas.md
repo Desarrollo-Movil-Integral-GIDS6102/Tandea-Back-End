@@ -81,5 +81,5 @@ El módulo de Tandas orquesta la creación, configuración financiera, invitaci�
 
 * El turno k cobra en `startDate + (k - 1)` periodos; el último coincide con `endDate`.
 * En cada vuelta el orden es #0 (si hay número muerto) y luego #1..#N. Solo existen filas de la vuelta 1, así que las demás vueltas repiten esos dueños.
-* El turno #0 no genera pagos (`montoAEsperar = 0`). `POST /pagos` rechaza con 422 cualquier pago antes de `fechaInicioPagos` (fecha de la Ciudad de México).
-* En los demás turnos se espera `cuota × numParticipants`.
+* El turno #0 también genera pagos: todos los participantes pagan. `fechaInicioPagos` es siempre `startDate`.
+* En todos los turnos se espera `cuota × numParticipants`.
