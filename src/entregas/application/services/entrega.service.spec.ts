@@ -101,6 +101,44 @@ describe('EntregaService', () => {
     await expect(registrar()).rejects.toThrow('no está en curso');
   });
 
+  describe('monto a entregar con cuotas no confirmadas (AP-10)', () => {
+    it('descuenta las cuotas no confirmadas y registra por el monto descontado', async () => {
+      repo.contarCuotasPendientes.mockResolvedValue({ sinPago: 0, noConfirmadas: 1 });
+
+      await registrar(ORGANIZADOR, { transferAmount: 200, cashAmount: 0 });
+
+      expect(repo.registrar).toHaveBeenCalledWith(expect.objectContaining({ totalAmount: 200 }));
+    });
+
+    it('rechaza el total completo si hay cuotas sin confirmar y explica el descuento', async () => {
+      repo.contarCuotasPendientes.mockResolvedValue({ sinPago: 0, noConfirmadas: 1 });
+
+      await expect(registrar()).rejects.toThrow('deben sumar 200.00 (el total del turno menos 1 cuota no confirmada)');
+      expect(storage.subir).not.toHaveBeenCalled();
+    });
+
+    it('con todas las cuotas sin confirmar no hay nada que entregar (409)', async () => {
+      repo.contarCuotasPendientes.mockResolvedValue({ sinPago: 3, noConfirmadas: 3 });
+
+      await expect(registrar()).rejects.toThrow('Aún no hay pagos confirmados');
+    });
+
+    it('un turno EN_RIESGO con pagos sin regularizar queda bloqueado', async () => {
+      repo.buscarNumero.mockResolvedValue(numero({ status: 'EN_RIESGO' }));
+      repo.contarCuotasPendientes.mockResolvedValue({ sinPago: 2, noConfirmadas: 2 });
+
+      await expect(registrar()).rejects.toThrow('faltan 2 pagos por regularizar');
+      expect(storage.subir).not.toHaveBeenCalled();
+    });
+
+    it('un turno EN_RIESGO ya regularizado (nadie sin pagar) deja registrar', async () => {
+      repo.buscarNumero.mockResolvedValue(numero({ status: 'EN_RIESGO' }));
+      repo.contarCuotasPendientes.mockResolvedValue({ sinPago: 0, noConfirmadas: 0 });
+
+      await expect(registrar()).resolves.toMatchObject({ idPayout: 1 });
+    });
+  });
+
   describe('número muerto (AP-10)', () => {
     const muerto = () => numero({ idNumber: 9, numberValue: 0, isDeadNumber: true, idUser: null });
     const vuelta = (...estados: string[]) => [
