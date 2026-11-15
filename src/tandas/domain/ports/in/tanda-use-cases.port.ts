@@ -62,6 +62,8 @@ export interface SeguimientoParticipante {
   numberValue: number;
   nombre: string;
   isDeadNumber: boolean;
+  /** Estado del turno del número: PENDIENTE, EN_RIESGO, ENTREGA_PENDIENTE_CONFIRMACION o ENTREGADO. */
+  estadoTurno: string;
   idPayment: number | null;
   estadoPago: string;
   montoPagado: number;

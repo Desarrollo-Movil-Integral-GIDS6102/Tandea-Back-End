@@ -184,6 +184,7 @@ export class TandaService implements TandaUseCasesPort {
           numberValue: n.numberValue,
           nombre: [n.userName, n.userLastName].filter(Boolean).join(' '),
           isDeadNumber: false,
+          estadoTurno: n.status,
           idPayment: n.idPayment ?? null,
           estadoPago: n.estadoPago ?? 'PENDIENTE',
           montoPagado: n.montoPagado ?? 0,
