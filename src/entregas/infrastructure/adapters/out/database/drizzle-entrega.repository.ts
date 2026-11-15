@@ -12,6 +12,7 @@ import {
 import {
   EntregaRecord,
   EntregaRepositoryPort,
+  NumeroDeLaVueltaRecord,
   NumeroParaEntrega,
   RegistrarEntregaData,
 } from '../../../../domain/ports/out/entrega-repository.port';
@@ -28,6 +29,7 @@ export class DrizzleEntregaRepository implements EntregaRepositoryPort {
       .select({
         idNumber: numberTable.idNumber,
         numberValue: numberTable.numberValue,
+        roundNumber: numberTable.roundNumber,
         idUser: numberTable.idUser,
         isDeadNumber: numberTable.isDeadNumber,
         status: numberTable.status,
@@ -43,6 +45,23 @@ export class DrizzleEntregaRepository implements EntregaRepositoryPort {
       .limit(1);
 
     return row ? { ...row, contributionAmount: Number(row.contributionAmount) } : null;
+  }
+
+  async listarNumerosDeLaVuelta(idTanda: number, roundNumber: number): Promise<NumeroDeLaVueltaRecord[]> {
+    return this.db
+      .select({
+        roundNumber: numberTable.roundNumber,
+        isDeadNumber: numberTable.isDeadNumber,
+        status: numberTable.status,
+      })
+      .from(numberTable)
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.roundNumber, roundNumber),
+          isNull(numberTable.deletedAt),
+        ),
+      );
   }
 
   async buscarTurnoVigente(idTanda: number): Promise<number | null> {

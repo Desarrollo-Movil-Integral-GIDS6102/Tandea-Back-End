@@ -12,6 +12,7 @@ const RECEPTOR = { idUser: 30, role: 'usuario' };
 const numero = (extra: Partial<NumeroParaEntrega> = {}): NumeroParaEntrega => ({
   idNumber: 5,
   numberValue: 1,
+  roundNumber: 1,
   idUser: 30,
   isDeadNumber: false,
   status: 'PENDIENTE',
@@ -38,6 +39,7 @@ describe('EntregaService', () => {
   beforeEach(() => {
     repo = {
       buscarNumero: vi.fn().mockResolvedValue(numero()),
+      listarNumerosDeLaVuelta: vi.fn().mockResolvedValue([]),
       buscarTurnoVigente: vi.fn().mockResolvedValue(5),
       registrar: vi.fn().mockResolvedValue(1),
       buscarPorId: vi.fn().mockResolvedValue(entrega),
@@ -93,12 +95,34 @@ describe('EntregaService', () => {
     expect(storage.subir).not.toHaveBeenCalled();
   });
 
-  it('rechaza el número muerto y las tandas que no están en curso', async () => {
-    repo.buscarNumero.mockResolvedValue(numero({ isDeadNumber: true, idUser: null }));
-    await expect(registrar()).rejects.toThrow('participante');
-
+  it('rechaza las tandas que no están en curso', async () => {
     repo.buscarNumero.mockResolvedValue(numero({ tandaStatus: 'PENDIENTE' }));
     await expect(registrar()).rejects.toThrow('no está en curso');
+  });
+
+  describe('número muerto (AP-10)', () => {
+    const muerto = () => numero({ idNumber: 9, numberValue: 0, isDeadNumber: true, idUser: null });
+    const vuelta = (...estados: string[]) => [
+      { roundNumber: 1, isDeadNumber: true, status: 'PENDIENTE' },
+      ...estados.map((status) => ({ roundNumber: 1, isDeadNumber: false, status })),
+    ];
+
+    it('no se puede cobrar mientras queden turnos reales sin entregar', async () => {
+      repo.buscarNumero.mockResolvedValue(muerto());
+      repo.listarNumerosDeLaVuelta.mockResolvedValue(vuelta('ENTREGADO', 'PENDIENTE', 'EN_RIESGO'));
+
+      await expect(registrar()).rejects.toThrow('solo puede cobrarse al terminar la vuelta 1');
+      expect(repo.listarNumerosDeLaVuelta).toHaveBeenCalledWith(7, 1);
+      expect(storage.subir).not.toHaveBeenCalled();
+    });
+
+    it('con la vuelta terminada ya no lo bloquea la regla del fin de vuelta', async () => {
+      repo.buscarNumero.mockResolvedValue(muerto());
+      repo.listarNumerosDeLaVuelta.mockResolvedValue(vuelta('ENTREGADO', 'ENTREGADO'));
+
+      // Pasa el bloqueo; lo detiene la regla de siempre: no tiene participante a quien entregar
+      await expect(registrar()).rejects.toThrow('participante');
+    });
   });
 
   it('el dueño del número confirma la recepción; nadie más puede', async () => {

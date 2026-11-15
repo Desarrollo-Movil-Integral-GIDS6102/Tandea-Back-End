@@ -21,6 +21,19 @@ export class NumeroMuertoNoElegibleError extends DomainError {
 }
 
 /**
+ * Error lanzado cuando se intenta cobrar el número muerto antes de que todos los
+ * turnos reales de la vuelta estén entregados (AP-10).
+ */
+export class NumeroMuertoCobroBloqueadoError extends DomainError {
+  constructor(public readonly roundNumber: number, public readonly pendientes: number) {
+    super(
+      `El número muerto solo puede cobrarse al terminar la vuelta ${roundNumber}: ` +
+        `faltan ${pendientes} ${pendientes === 1 ? 'turno por entregar' : 'turnos por entregar'}.`,
+    );
+  }
+}
+
+/**
  * Error lanzado cuando se intenta acceder o asignar un número que no existe en la tanda.
  */
 export class NumeroInexistenteError extends DomainError {

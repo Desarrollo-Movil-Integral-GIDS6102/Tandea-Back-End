@@ -11,7 +11,10 @@ import {
   ENTREGA_REPOSITORY_PORT,
   type EntregaRecord,
   type EntregaRepositoryPort,
+  type NumeroParaEntrega,
 } from '../../domain/ports/out/entrega-repository.port';
+import { NumeroTanda, type NumeroStatus } from '../../../tandas/domain/entities/numero-tanda.entity';
+import { NumeroMuertoCobroBloqueadoError } from '../../../tandas/domain/errors/numero.errors';
 import type {
   EntregaUseCasesPort,
   RegistrarEntregaCommand,
@@ -57,6 +60,10 @@ export class EntregaService implements EntregaUseCasesPort {
     if (numero.tandaStatus !== 'ACTIVA') {
       throw new BadRequestException('La tanda no está en curso');
     }
+    if (numero.isDeadNumber) {
+      // El muerto es la caja de respaldo: no se cobra hasta que la vuelta termine (AP-10)
+      await this.asegurarCobroNumeroMuerto(numero);
+    }
     if (numero.isDeadNumber || numero.idUser === null) {
       throw new BadRequestException('Este número no tiene un participante a quien entregar');
     }
@@ -92,6 +99,28 @@ export class EntregaService implements EntregaUseCasesPort {
     const entrega = await this.buscar(idPayout);
     await this.publicarEntregaRegistrada(entrega, numero.idUser);
     return entrega;
+  }
+
+  /** Convierte la regla de dominio "el muerto no cobra antes del fin de la vuelta" en un 409. */
+  private async asegurarCobroNumeroMuerto(numero: NumeroParaEntrega): Promise<void> {
+    const delaVuelta = await this.repository.listarNumerosDeLaVuelta(numero.idTanda, numero.roundNumber);
+    const muerto = new NumeroTanda({
+      idNumber: numero.idNumber,
+      idTanda: numero.idTanda,
+      roundNumber: numero.roundNumber,
+      numberValue: numero.numberValue,
+      idUser: numero.idUser,
+      isDeadNumber: true,
+      status: numero.status as NumeroStatus,
+    });
+    try {
+      muerto.asegurarCobro(delaVuelta.map((n) => ({ ...n, status: n.status as NumeroStatus })));
+    } catch (error: unknown) {
+      if (error instanceof NumeroMuertoCobroBloqueadoError) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
   }
 
   private async publicarEntregaRegistrada(entrega: EntregaRecord, idReceptor: number): Promise<void> {
