@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { TandaModule } from './tandas/tanda.module';
 import { EntregaModule } from './entregas/entrega.module';
 import { NotificacionModule } from './notificaciones/notificacion.module';
+import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -31,6 +32,7 @@ import { AppService } from './app.service';
     TandaModule,
     EntregaModule,
     NotificacionModule,
+    AdminModule,
     // ParticipanteModule,
   ],
   controllers: [AppController],
