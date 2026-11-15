@@ -26,6 +26,7 @@ import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
 import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
 import { sortearNumeros } from '../../domain/services/sortear-numeros';
 import { calcularPlan } from '../../domain/services/calcular-plan';
+import { calcularMontoAEntregar } from '../../domain/services/calcular-monto-a-entregar';
 import { generarCalendario, fechaInicioPagos } from '../../domain/services/generar-calendario';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
@@ -185,6 +186,12 @@ export class TandaService implements TandaUseCasesPort {
     // Se agrega aparte para no alterar la lista de participantes que ya consume el cliente
     const muerto = numeros.find((n) => n.isDeadNumber);
     const cubiertos = participantes.filter((p) => p.cubiertoPorNumeroMuerto);
+
+    // Turno que se está cobrando: el número real más bajo que aún no se entrega
+    const vigente = numeros
+      .filter((n) => !n.isDeadNumber && n.status !== 'ENTREGADO')
+      .sort((a, b) => a.numberValue - b.numberValue)[0];
+    const sinPago = participantes.filter((p) => p.idPayment === null).length;
     return {
       tanda: {
         idTanda: tanda.idTanda,
@@ -194,6 +201,19 @@ export class TandaService implements TandaUseCasesPort {
       },
       vueltaActual: 1,
       cuota: tanda.contributionAmount,
+      turnoVigente: vigente
+        ? {
+            idNumber: vigente.idNumber,
+            numberValue: vigente.numberValue,
+            estadoTurno: vigente.status,
+            ...calcularMontoAEntregar({
+              montoCuota: tanda.contributionAmount,
+              numParticipantes: tanda.numParticipants,
+              cuotasNoConfirmadas: participantes.filter((p) => p.estadoPago !== 'CONFIRMADO').length,
+            }),
+            bloqueado: vigente.status === 'EN_RIESGO' && sinPago > 0,
+          }
+        : null,
       numeroMuerto: muerto
         ? {
             idNumber: muerto.idNumber,

@@ -2,6 +2,7 @@
 import { Tanda, TandaStatus, TandaProps } from '../../entities/tanda.entity';
 import type { PeriodicidadTanda } from '../../services/calcular-plan';
 import type { TurnoCalendario } from '../../services/generar-calendario';
+import type { MontoAEntregar } from '../../services/calcular-monto-a-entregar';
 import { NumberRecord } from '../out/number-repository.port';
 import type { TipoMovimiento } from '../out/tanda-repository.port';
 
@@ -81,10 +82,21 @@ export interface SeguimientoNumeroMuerto {
   montoCubierto: number;
 }
 
+/** El turno que se está cobrando y cuánto se le entregaría a su dueño hoy (AP-10). */
+export interface SeguimientoTurnoVigente extends MontoAEntregar {
+  idNumber: number;
+  numberValue: number;
+  estadoTurno: string;
+  /** true si la entrega no se puede registrar hasta regularizar los pagos que faltan. */
+  bloqueado: boolean;
+}
+
 export interface SeguimientoTanda {
   tanda: Pick<TandaProps, 'idTanda' | 'name' | 'numRounds' | 'contributionAmount'>;
   vueltaActual: number;
   cuota: number;
+  /** null si ya se entregaron todos los turnos. */
+  turnoVigente: SeguimientoTurnoVigente | null;
   /** null si la tanda no tiene número muerto. */
   numeroMuerto: SeguimientoNumeroMuerto | null;
   participantes: SeguimientoParticipante[];

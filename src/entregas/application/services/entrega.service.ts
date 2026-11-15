@@ -25,7 +25,8 @@ import {
   type EntregaEventsPort,
 } from '../../domain/ports/out/entrega-events.port';
 import { STORAGE_PORT, type StoragePort } from '../../../pagos/domain/ports/out/storage.port';
-import { sumarCentavosExactos, toCentavos } from '../../../pagos/domain/utils/moneda.util';
+import { sumarCentavosExactos } from '../../../pagos/domain/utils/moneda.util';
+import { calcularMontoAEntregar } from '../../../tandas/domain/services/calcular-monto-a-entregar';
 
 /**
  * Entrega del dinero del turno con doble confirmación: el organizador la registra con
@@ -74,8 +75,27 @@ export class EntregaService implements EntregaUseCasesPort {
       throw new ConflictException(`Aún no es el turno del número #${numero.numberValue}`);
     }
 
-    const totalAmount = (toCentavos(numero.contributionAmount) * numero.numParticipants) / 100;
+    // Se entrega el total del turno menos las cuotas que no están confirmadas (AP-10)
+    const cuotas = await this.repository.contarCuotasPendientes(numero.idTanda);
+    if (numero.status === 'EN_RIESGO' && cuotas.sinPago > 0) {
+      throw new ConflictException(
+        `El turno está en riesgo: faltan ${cuotas.sinPago} ${cuotas.sinPago === 1 ? 'pago' : 'pagos'} por regularizar antes de registrar la entrega`,
+      );
+    }
+    const { montoAEntregar: totalAmount, cuotasNoConfirmadas } = calcularMontoAEntregar({
+      montoCuota: numero.contributionAmount,
+      numParticipantes: numero.numParticipants,
+      cuotasNoConfirmadas: cuotas.noConfirmadas,
+    });
+    if (totalAmount <= 0) {
+      throw new ConflictException('Aún no hay pagos confirmados para entregar en este turno');
+    }
     if (!sumarCentavosExactos(cashAmount, transferAmount, totalAmount)) {
+      if (cuotasNoConfirmadas > 0) {
+        throw new BadRequestException(
+          `Los montos deben sumar ${totalAmount.toFixed(2)} (el total del turno menos ${cuotasNoConfirmadas} ${cuotasNoConfirmadas === 1 ? 'cuota no confirmada' : 'cuotas no confirmadas'})`,
+        );
+      }
       throw new BadRequestException(`Los montos deben sumar ${totalAmount.toFixed(2)}`);
     }
 

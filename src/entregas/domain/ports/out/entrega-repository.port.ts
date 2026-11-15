@@ -47,8 +47,17 @@ export interface NumeroDeLaVueltaRecord {
   status: string;
 }
 
+/** Cuotas de una tanda que siguen sin cerrarse, contadas sobre `payment` (sin columnas cacheadas). */
+export interface CuotasPendientes {
+  /** Números con dueño que no tienen ningún pago PENDIENTE ni CONFIRMADO. */
+  sinPago: number;
+  /** Números con dueño cuyo pago no está CONFIRMADO (incluye a los de `sinPago`). */
+  noConfirmadas: number;
+}
+
 export interface EntregaRepositoryPort {
   buscarNumero(idNumber: number): Promise<NumeroParaEntrega | null>;
+  contarCuotasPendientes(idTanda: number): Promise<CuotasPendientes>;
   /** Todos los números (incluido el muerto) de la tanda en esa vuelta. */
   listarNumerosDeLaVuelta(idTanda: number, roundNumber: number): Promise<NumeroDeLaVueltaRecord[]>;
   /** Número de participante más bajo cuyo turno no se ha cerrado. */

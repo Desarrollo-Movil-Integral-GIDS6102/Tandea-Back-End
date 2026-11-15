@@ -1,15 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, gte, isNull, ne } from 'drizzle-orm';
+import { and, asc, count, eq, gte, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import {
   disputeTable,
   evidenceTable,
   numberTable,
+  paymentTable,
   payoutTable,
   tandaTable,
 } from '../../../../../database/tandea.schema';
 import {
+  CuotasPendientes,
   EntregaRecord,
   EntregaRepositoryPort,
   NumeroDeLaVueltaRecord,
@@ -45,6 +47,32 @@ export class DrizzleEntregaRepository implements EntregaRepositoryPort {
       .limit(1);
 
     return row ? { ...row, contributionAmount: Number(row.contributionAmount) } : null;
+  }
+
+  async contarCuotasPendientes(idTanda: number): Promise<CuotasPendientes> {
+    const [fila] = await this.db
+      .select({
+        sinPago: sql<number>`count(*) filter (where not exists (
+          select 1 from ${paymentTable}
+          where ${paymentTable.idNumber} = ${numberTable.idNumber}
+            and ${paymentTable.status} in ('PENDIENTE', 'CONFIRMADO')
+        ))`.mapWith(Number),
+        noConfirmadas: sql<number>`count(*) filter (where not exists (
+          select 1 from ${paymentTable}
+          where ${paymentTable.idNumber} = ${numberTable.idNumber}
+            and ${paymentTable.status} = 'CONFIRMADO'
+        ))`.mapWith(Number),
+      })
+      .from(numberTable)
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.isDeadNumber, false),
+          isNotNull(numberTable.idUser),
+          isNull(numberTable.deletedAt),
+        ),
+      );
+    return { sinPago: fila?.sinPago ?? 0, noConfirmadas: fila?.noConfirmadas ?? 0 };
   }
 
   async listarNumerosDeLaVuelta(idTanda: number, roundNumber: number): Promise<NumeroDeLaVueltaRecord[]> {

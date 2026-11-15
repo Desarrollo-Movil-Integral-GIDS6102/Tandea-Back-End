@@ -40,6 +40,7 @@ describe('EntregaService', () => {
     repo = {
       buscarNumero: vi.fn().mockResolvedValue(numero()),
       listarNumerosDeLaVuelta: vi.fn().mockResolvedValue([]),
+      contarCuotasPendientes: vi.fn().mockResolvedValue({ sinPago: 0, noConfirmadas: 0 }),
       buscarTurnoVigente: vi.fn().mockResolvedValue(5),
       registrar: vi.fn().mockResolvedValue(1),
       buscarPorId: vi.fn().mockResolvedValue(entrega),
