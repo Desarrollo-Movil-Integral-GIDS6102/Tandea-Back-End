@@ -6,7 +6,6 @@ import {
   disputeTable,
   evidenceTable,
   numberTable,
-  paymentTable,
   payoutTable,
   tandaTable,
 } from '../../../../../database/tandea.schema';
@@ -52,15 +51,17 @@ export class DrizzleEntregaRepository implements EntregaRepositoryPort {
   async contarCuotasPendientes(idTanda: number): Promise<CuotasPendientes> {
     const [fila] = await this.db
       .select({
+        // Columnas escritas completas: en un select de una sola tabla Drizzle no las califica y
+        // el exists compararía el pago consigo mismo
         sinPago: sql<number>`count(*) filter (where not exists (
-          select 1 from ${paymentTable}
-          where ${paymentTable.idNumber} = ${numberTable.idNumber}
-            and ${paymentTable.status} in ('PENDIENTE', 'CONFIRMADO')
+          select 1 from "payment" as p
+          where p."id_number" = "number"."id_number"
+            and p."status" in ('PENDIENTE', 'CONFIRMADO')
         ))`.mapWith(Number),
         noConfirmadas: sql<number>`count(*) filter (where not exists (
-          select 1 from ${paymentTable}
-          where ${paymentTable.idNumber} = ${numberTable.idNumber}
-            and ${paymentTable.status} = 'CONFIRMADO'
+          select 1 from "payment" as p
+          where p."id_number" = "number"."id_number"
+            and p."status" = 'CONFIRMADO'
         ))`.mapWith(Number),
       })
       .from(numberTable)

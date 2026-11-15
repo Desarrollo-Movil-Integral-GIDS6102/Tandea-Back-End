@@ -52,10 +52,12 @@ export class DrizzleCoberturaRepository implements CoberturaRepositoryPort {
         idUser: numberTable.idUser,
         isDeadNumber: numberTable.isDeadNumber,
         status: numberTable.status,
+        // Columnas escritas completas: en un select de una sola tabla Drizzle no las califica y
+        // el exists compararía el pago consigo mismo (siempre verdadero)
         tienePagoActivo: sql<boolean>`exists (
-          select 1 from ${paymentTable}
-          where ${paymentTable.idNumber} = ${numberTable.idNumber}
-            and ${paymentTable.status} in ('PENDIENTE', 'CONFIRMADO')
+          select 1 from "payment" as p
+          where p."id_number" = "number"."id_number"
+            and p."status" in ('PENDIENTE', 'CONFIRMADO')
         )`,
       })
       .from(numberTable)
