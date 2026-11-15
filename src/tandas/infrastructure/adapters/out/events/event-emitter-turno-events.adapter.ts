@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
+  NUMERO_MUERTO_USADO,
   TURNO_EN_RIESGO,
+  type NumeroMuertoUsadoEvent,
   type TurnoEnRiesgoEvent,
   type TurnoEventsPort,
 } from '../../../../domain/ports/out/turno-events.port';
@@ -16,5 +18,9 @@ export class EventEmitterTurnoEventsAdapter implements TurnoEventsPort {
 
   async publicarTurnoEnRiesgo(evento: TurnoEnRiesgoEvent): Promise<void> {
     this.eventEmitter.emit(TURNO_EN_RIESGO, evento);
+  }
+
+  async publicarNumeroMuertoUsado(evento: NumeroMuertoUsadoEvent): Promise<void> {
+    this.eventEmitter.emit(NUMERO_MUERTO_USADO, evento);
   }
 }

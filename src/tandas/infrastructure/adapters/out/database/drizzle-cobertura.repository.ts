@@ -3,7 +3,11 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import { numberTable, paymentTable, tandaTable } from '../../../../../database/tandea.schema';
-import type { CoberturaRepositoryPort } from '../../../../domain/ports/out/cobertura-repository.port';
+import type {
+  CoberturaNumeroMuerto,
+  CoberturaRepositoryPort,
+  PagoCubierto,
+} from '../../../../domain/ports/out/cobertura-repository.port';
 import type { PeriodicidadTanda } from '../../../../domain/services/calcular-plan';
 import type { NumeroStatus } from '../../../../domain/entities/numero-tanda.entity';
 import type { TandaParaCobertura } from '../../../../domain/services/evaluar-turno';
@@ -79,6 +83,52 @@ export class DrizzleCoberturaRepository implements CoberturaRepositoryPort {
             tienePagoActivo: Boolean(n.tienePagoActivo),
           })),
       };
+    });
+  }
+
+  async cubrirConNumeroMuerto(datos: CoberturaNumeroMuerto): Promise<PagoCubierto[]> {
+    if (datos.idNumbers.length === 0) return [];
+    const cuota = datos.montoCuota.toFixed(2);
+
+    return this.db.transaction(async (tx) => {
+      // Bloquea las filas para que dos corridas simultáneas no cubran el mismo número
+      await tx
+        .select({ idNumber: numberTable.idNumber })
+        .from(numberTable)
+        .where(inArray(numberTable.idNumber, datos.idNumbers))
+        .for('update');
+
+      const cubiertos: PagoCubierto[] = [];
+      for (const idNumber of datos.idNumbers) {
+        const [yaPago] = await tx
+          .select({ idPayment: paymentTable.idPayment })
+          .from(paymentTable)
+          .where(
+            and(
+              eq(paymentTable.idNumber, idNumber),
+              inArray(paymentTable.status, ['PENDIENTE', 'CONFIRMADO']),
+            ),
+          )
+          .limit(1);
+        if (yaPago) continue;
+
+        // Cobertura del sistema: sin montos en efectivo/transferencia ni confirmación del participante
+        const [pago] = await tx
+          .insert(paymentTable)
+          .values({
+            idNumber,
+            idDeadNumber: datos.idNumeroMuerto,
+            transferAmount: '0',
+            cashAmount: '0',
+            totalAmount: cuota,
+            confirmedByParticipant: false,
+            confirmedByAdmin: true,
+            status: 'CONFIRMADO',
+          })
+          .returning({ idPayment: paymentTable.idPayment });
+        cubiertos.push({ idPayment: pago.idPayment, idNumber });
+      }
+      return cubiertos;
     });
   }
 

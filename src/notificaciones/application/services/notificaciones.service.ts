@@ -5,7 +5,10 @@ import type {
   PagoRegistradoEvent,
 } from '../../../pagos/domain/ports/out/pago-events.port';
 import type { EntregaRegistradaEvent } from '../../../entregas/domain/ports/out/entrega-events.port';
-import type { TurnoEnRiesgoEvent } from '../../../tandas/domain/ports/out/turno-events.port';
+import type {
+  NumeroMuertoUsadoEvent,
+  TurnoEnRiesgoEvent,
+} from '../../../tandas/domain/ports/out/turno-events.port';
 import {
   NOTIFICACION_REPOSITORY_PORT,
   TIPO_NOTIFICACION,
@@ -132,6 +135,37 @@ export class NotificacionesService {
       titulo: 'Tu turno está en riesgo',
       mensaje: `Tu turno (número ${evento.numero}) en la tanda "${evento.nombreTanda}" está en riesgo: faltan ${faltan}. Tu cobro queda en espera hasta que se regularicen.`,
     });
+  }
+
+  /**
+   * numero_muerto.usado → avisa al organizador cuántas cuotas cubrió el número muerto y a cada
+   * participante cubierto que su cuota se pagó con la caja de respaldo (AP-10).
+   */
+  async alUsarseNumeroMuerto(evento: NumeroMuertoUsadoEvent): Promise<void> {
+    const formato = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+    const total = evento.cubiertos.length;
+    const base = {
+      idTanda: evento.idTanda,
+      type: TIPO_NOTIFICACION.NUMERO_MUERTO_USADO,
+      route: `/tandas/detalle/${evento.idTanda}`,
+    };
+
+    await this.notificar({
+      ...base,
+      idUser: evento.idOrganizador,
+      titulo: 'Se usó el número muerto',
+      mensaje: `El número muerto cubrió ${total} ${total === 1 ? 'pago faltante' : 'pagos faltantes'} (${formato.format(evento.montoCubierto)}) del turno ${evento.numeroDelTurno} en la tanda "${evento.nombreTanda}".`,
+    });
+
+    for (const c of evento.cubiertos) {
+      if (c.idUser === evento.idOrganizador) continue;
+      await this.notificar({
+        ...base,
+        idUser: c.idUser,
+        titulo: 'Tu pago lo cubrió el número muerto',
+        mensaje: `No pagaste a tiempo el número ${c.numero} de la tanda "${evento.nombreTanda}" y el número muerto cubrió tu cuota. Habla con el organizador para regularizarlo.`,
+      });
+    }
   }
 
   private async buscarContexto(paymentId: number) {

@@ -12,6 +12,7 @@ export const TIPO_NOTIFICACION = {
   TURNO_COBRO_PROXIMO: 'turno_cobro_proximo',
   ENTREGA_REGISTRADA: 'entrega_registrada',
   TURNO_EN_RIESGO: 'turno_en_riesgo',
+  NUMERO_MUERTO_USADO: 'numero_muerto_usado',
 } as const;
 
 export type TipoNotificacion =

@@ -4,13 +4,19 @@ import {
   type CoberturaRepositoryPort,
 } from '../../domain/ports/out/cobertura-repository.port';
 import { TURNO_EVENTS_PORT, type TurnoEventsPort } from '../../domain/ports/out/turno-events.port';
-import { planificarTurno, type TandaParaCobertura } from '../../domain/services/evaluar-turno';
+import {
+  planificarTurno,
+  type NumeroParaCobertura,
+  type TandaParaCobertura,
+} from '../../domain/services/evaluar-turno';
 
 export const ZONA_HORARIA_TURNOS = 'America/Mexico_City';
 
 export interface ResultadoCobertura {
   enRiesgo: number;
   regularizados: number;
+  /** Pagos que el número muerto cubrió. */
+  cubiertos: number;
 }
 
 /**
@@ -34,7 +40,7 @@ export class CoberturaTurnosService {
 
   async revisarTurnosVencidos(ahora: Date = new Date()): Promise<ResultadoCobertura> {
     const hoy = ahora.toLocaleDateString('en-CA', { timeZone: ZONA_HORARIA_TURNOS });
-    const resultado: ResultadoCobertura = { enRiesgo: 0, regularizados: 0 };
+    const resultado: ResultadoCobertura = { enRiesgo: 0, regularizados: 0, cubiertos: 0 };
 
     for (const tanda of await this.repositorio.listarTandasActivas()) {
       try {
@@ -48,9 +54,49 @@ export class CoberturaTurnosService {
     }
 
     this.logger.log(
-      `Turnos vencidos (${hoy}): ${resultado.enRiesgo} en riesgo, ${resultado.regularizados} regularizados.`,
+      `Turnos vencidos (${hoy}): ${resultado.cubiertos} pagos cubiertos por el número muerto, ${resultado.enRiesgo} en riesgo, ${resultado.regularizados} regularizados.`,
     );
     return resultado;
+  }
+
+  /** El número muerto paga la cuota de quienes no pagaron, todo en una transacción (AP-10). */
+  private async cubrirConNumeroMuerto(
+    tanda: TandaParaCobertura,
+    faltantes: NumeroParaCobertura[],
+    numeroDelTurno: number,
+    resultado: ResultadoCobertura,
+  ): Promise<void> {
+    const pagos = await this.repositorio.cubrirConNumeroMuerto({
+      idNumeroMuerto: tanda.idNumeroMuerto!,
+      montoCuota: tanda.montoCuota,
+      idNumbers: faltantes.map((f) => f.idNumber),
+    });
+    if (pagos.length === 0) return;
+    resultado.cubiertos += pagos.length;
+
+    const porNumero = new Map(faltantes.map((f) => [f.idNumber, f]));
+    try {
+      await this.eventos.publicarNumeroMuertoUsado({
+        idTanda: tanda.idTanda,
+        nombreTanda: tanda.nombre,
+        idNumeroMuerto: tanda.idNumeroMuerto!,
+        idOrganizador: tanda.idAdmin,
+        numeroDelTurno,
+        // En centavos para no arrastrar errores de punto flotante
+        montoCubierto: (Math.round(tanda.montoCuota * 100) * pagos.length) / 100,
+        cubiertos: pagos.map((p) => ({
+          idPayment: p.idPayment,
+          idNumber: p.idNumber,
+          numero: porNumero.get(p.idNumber)!.numero,
+          idUser: porNumero.get(p.idNumber)!.idUser,
+        })),
+      });
+    } catch (error: unknown) {
+      // Los pagos de cobertura ya quedaron guardados; un fallo del bus no debe deshacerlos
+      this.logger.error(
+        `No se pudo publicar numero_muerto.usado de la tanda ${tanda.idTanda}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private async revisarTanda(
@@ -65,7 +111,13 @@ export class CoberturaTurnosService {
       resultado.regularizados += plan.aRegularizar.length;
     }
 
-    if (plan.decision !== 'EN_RIESGO' || !plan.beneficiario) return;
+    if (!plan.beneficiario || !plan.turno) return;
+
+    if (plan.decision === 'CUBRIR_CON_NUMERO_MUERTO' && tanda.idNumeroMuerto !== null) {
+      await this.cubrirConNumeroMuerto(tanda, plan.faltantes, plan.turno.numero, resultado);
+      return;
+    }
+    if (plan.decision !== 'EN_RIESGO') return;
 
     // Solo avisa la primera vez: si ya estaba EN_RIESGO no cambia nada
     if (!(await this.repositorio.marcarEnRiesgo(plan.beneficiario.idNumber))) return;

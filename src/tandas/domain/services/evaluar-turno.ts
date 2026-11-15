@@ -28,7 +28,7 @@ export interface TandaParaCobertura {
 }
 
 /** Qué hacer con el turno cuya fecha límite ya pasó. */
-export type DecisionTurno = 'SIN_FALTANTES' | 'EN_RIESGO';
+export type DecisionTurno = 'SIN_FALTANTES' | 'CUBRIR_CON_NUMERO_MUERTO' | 'EN_RIESGO';
 
 export interface PlanDeTurno {
   /** Turno cuya gracia ya venció; null si todavía no hay ninguno o no tiene beneficiario. */
@@ -65,9 +65,9 @@ export function turnoVencido(tanda: TandaParaCobertura, hoy: string): TurnoCalen
  * qué pasa con los pagos que faltan.
  *
  *  - Sin pagos faltantes no hay nada que hacer (y si el beneficiario estaba EN_RIESGO, se regulariza).
+ *  - Con faltantes y número muerto, el muerto cubre las cuotas que faltan (caja de respaldo).
  *  - Con faltantes y SIN número muerto, el turno del beneficiario queda EN_RIESGO.
- *  - El turno #0 no tiene beneficiario, así que no hay nada en riesgo.
- *  - Las tandas con número muerto las atiende la cobertura (otra regla).
+ *  - El turno #0 no tiene beneficiario, así que no hay nada que cubrir ni en riesgo.
  */
 export function planificarTurno(tanda: TandaParaCobertura, hoy: string): PlanDeTurno {
   const faltantes = tanda.numeros.filter((n) => !n.tienePagoActivo);
@@ -86,8 +86,8 @@ export function planificarTurno(tanda: TandaParaCobertura, hoy: string): PlanDeT
   if (faltantes.length === 0) {
     return { turno, beneficiario, faltantes, decision: 'SIN_FALTANTES', aRegularizar };
   }
-  if (tanda.tieneNumeroMuerto) {
-    return { turno, beneficiario, faltantes, decision: null, aRegularizar };
+  if (tanda.tieneNumeroMuerto && tanda.idNumeroMuerto !== null) {
+    return { turno, beneficiario, faltantes, decision: 'CUBRIR_CON_NUMERO_MUERTO', aRegularizar };
   }
   return { turno, beneficiario, faltantes, decision: 'EN_RIESGO', aRegularizar };
 }

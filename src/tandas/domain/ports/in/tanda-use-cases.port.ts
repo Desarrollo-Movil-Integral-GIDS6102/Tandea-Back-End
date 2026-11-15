@@ -65,15 +65,28 @@ export interface SeguimientoParticipante {
   /** Estado del turno del número: PENDIENTE, EN_RIESGO, ENTREGA_PENDIENTE_CONFIRMACION o ENTREGADO. */
   estadoTurno: string;
   idPayment: number | null;
+  /** true si su cuota la cubrió el número muerto porque no pagó a tiempo (AP-10). */
+  cubiertoPorNumeroMuerto: boolean;
   estadoPago: string;
   montoPagado: number;
   fechaPago: Date | null;
+}
+
+/** El número muerto de la tanda: su estado y cuánto ha cubierto. */
+export interface SeguimientoNumeroMuerto {
+  idNumber: number;
+  numberValue: number;
+  estadoTurno: string;
+  pagosCubiertos: number;
+  montoCubierto: number;
 }
 
 export interface SeguimientoTanda {
   tanda: Pick<TandaProps, 'idTanda' | 'name' | 'numRounds' | 'contributionAmount'>;
   vueltaActual: number;
   cuota: number;
+  /** null si la tanda no tiene número muerto. */
+  numeroMuerto: SeguimientoNumeroMuerto | null;
   participantes: SeguimientoParticipante[];
 }
 
