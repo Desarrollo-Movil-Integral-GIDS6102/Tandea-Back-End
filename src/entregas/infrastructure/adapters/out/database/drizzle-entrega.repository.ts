@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, gte, isNull, ne } from 'drizzle-orm';
+import { and, asc, count, eq, gte, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DATABASE_TOKEN } from '../../../../../common/tokens';
 import {
@@ -10,8 +10,10 @@ import {
   tandaTable,
 } from '../../../../../database/tandea.schema';
 import {
+  CuotasPendientes,
   EntregaRecord,
   EntregaRepositoryPort,
+  NumeroDeLaVueltaRecord,
   NumeroParaEntrega,
   RegistrarEntregaData,
 } from '../../../../domain/ports/out/entrega-repository.port';
@@ -28,6 +30,7 @@ export class DrizzleEntregaRepository implements EntregaRepositoryPort {
       .select({
         idNumber: numberTable.idNumber,
         numberValue: numberTable.numberValue,
+        roundNumber: numberTable.roundNumber,
         idUser: numberTable.idUser,
         isDeadNumber: numberTable.isDeadNumber,
         status: numberTable.status,
@@ -43,6 +46,51 @@ export class DrizzleEntregaRepository implements EntregaRepositoryPort {
       .limit(1);
 
     return row ? { ...row, contributionAmount: Number(row.contributionAmount) } : null;
+  }
+
+  async contarCuotasPendientes(idTanda: number): Promise<CuotasPendientes> {
+    const [fila] = await this.db
+      .select({
+        // Columnas escritas completas: en un select de una sola tabla Drizzle no las califica y
+        // el exists compararía el pago consigo mismo
+        sinPago: sql<number>`count(*) filter (where not exists (
+          select 1 from "payment" as p
+          where p."id_number" = "number"."id_number"
+            and p."status" in ('PENDIENTE', 'CONFIRMADO')
+        ))`.mapWith(Number),
+        noConfirmadas: sql<number>`count(*) filter (where not exists (
+          select 1 from "payment" as p
+          where p."id_number" = "number"."id_number"
+            and p."status" = 'CONFIRMADO'
+        ))`.mapWith(Number),
+      })
+      .from(numberTable)
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.isDeadNumber, false),
+          isNotNull(numberTable.idUser),
+          isNull(numberTable.deletedAt),
+        ),
+      );
+    return { sinPago: fila?.sinPago ?? 0, noConfirmadas: fila?.noConfirmadas ?? 0 };
+  }
+
+  async listarNumerosDeLaVuelta(idTanda: number, roundNumber: number): Promise<NumeroDeLaVueltaRecord[]> {
+    return this.db
+      .select({
+        roundNumber: numberTable.roundNumber,
+        isDeadNumber: numberTable.isDeadNumber,
+        status: numberTable.status,
+      })
+      .from(numberTable)
+      .where(
+        and(
+          eq(numberTable.idTanda, idTanda),
+          eq(numberTable.roundNumber, roundNumber),
+          isNull(numberTable.deletedAt),
+        ),
+      );
   }
 
   async buscarTurnoVigente(idTanda: number): Promise<number | null> {

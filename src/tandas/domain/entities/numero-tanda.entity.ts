@@ -2,6 +2,7 @@ import {
   NumeroYaTomadoError,
   NumeroMuertoNoElegibleError,
   NumeroFueraDeRangoError,
+  NumeroMuertoCobroBloqueadoError,
 } from '../errors/numero.errors';
 
 /** El número muerto (caja de respaldo) siempre es el #0; los participantes usan #1..#N. */
@@ -31,6 +32,9 @@ export interface NumeroTandaProps {
  * Entidad rica de dominio para la gestión del turno / número dentro de una tanda.
  * No depende de ningún framework ni librería externa.
  */
+/** Lo mínimo que se necesita de cada número de la vuelta para decidir si el muerto puede cobrarse. */
+export type NumeroDeLaVuelta = Pick<NumeroTandaProps, 'roundNumber' | 'isDeadNumber' | 'status'>;
+
 export class NumeroTanda {
   private props: NumeroTandaProps;
 
@@ -125,6 +129,29 @@ export class NumeroTanda {
     }
     this.props.idUser = null;
     this.props.updatedAt = new Date();
+  }
+
+  /**
+   * Un número real puede cobrarse en su turno. El número muerto (la caja de respaldo)
+   * solo cuando todos los números reales de su vuelta ya están ENTREGADO, porque
+   * hasta entonces su dinero puede hacer falta para cubrir pagos faltantes (AP-10).
+   */
+  puedeCobrarse(numerosDeLaVuelta: NumeroDeLaVuelta[]): boolean {
+    if (!this.props.isDeadNumber) return true;
+    const reales = this.realesDeMiVuelta(numerosDeLaVuelta);
+    return reales.length > 0 && reales.every((n) => n.status === 'ENTREGADO');
+  }
+
+  /** Igual que `puedeCobrarse`, pero lanza NumeroMuertoCobroBloqueadoError si todavía no. */
+  asegurarCobro(numerosDeLaVuelta: NumeroDeLaVuelta[]): void {
+    if (this.puedeCobrarse(numerosDeLaVuelta)) return;
+    const reales = this.realesDeMiVuelta(numerosDeLaVuelta);
+    const pendientes = reales.filter((n) => n.status !== 'ENTREGADO').length;
+    throw new NumeroMuertoCobroBloqueadoError(this.props.roundNumber, Math.max(pendientes, 1));
+  }
+
+  private realesDeMiVuelta(numeros: NumeroDeLaVuelta[]): NumeroDeLaVuelta[] {
+    return numeros.filter((n) => !n.isDeadNumber && n.roundNumber === this.props.roundNumber);
   }
 
   toPrimitives(): NumeroTandaProps {

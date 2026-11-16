@@ -13,6 +13,7 @@ import { UsersFcmController } from './infrastructure/adapters/in/http/controller
 import { NotificacionesController } from './infrastructure/adapters/in/http/controllers/notificaciones.controller';
 import { PagoEventsListener } from './infrastructure/adapters/in/events/pago-events.listener';
 import { EntregaEventsListener } from './infrastructure/adapters/in/events/entrega-events.listener';
+import { TurnoEventsListener } from './infrastructure/adapters/in/events/turno-events.listener';
 import { RecordatoriosCron } from './infrastructure/adapters/in/scheduler/recordatorios.cron';
 
 // Outbound Adapters
@@ -35,6 +36,7 @@ import { BANDEJA_USE_CASE_PORT } from './domain/ports/in/bandeja-use-case.port';
  *  - Entrada HTTP: GET /notificaciones, PATCH /notificaciones/:id/leida ➔ NotificacionesController ➔ BandejaService
  *  - Entrada: eventos pago.* ➔ PagoEventsListener ➔ NotificacionesService
  *  - Entrada: evento entrega.registrada ➔ EntregaEventsListener ➔ NotificacionesService
+ *  - Entrada: evento turno.en_riesgo ➔ TurnoEventsListener ➔ NotificacionesService (AP-10)
  *  - Entrada: cron diario 9:00 CDMX ➔ RecordatoriosCron ➔ RecordatoriosPagoService (AP-08)
  *  - Salida: NOTIFICACION_REPOSITORY_PORT ➔ DrizzleNotificacionRepository
  *  - Salida: FCM_TOKEN_REPOSITORY_PORT ➔ DrizzleFcmTokenRepository
@@ -71,6 +73,7 @@ import { BANDEJA_USE_CASE_PORT } from './domain/ports/in/bandeja-use-case.port';
     DrizzleFcmTokenRepository,
     PagoEventsListener,
     EntregaEventsListener,
+    TurnoEventsListener,
     RecordatoriosCron,
   ],
   exports: [

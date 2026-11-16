@@ -50,6 +50,13 @@
       "when": 1794093856349,
       "tag": "0007_payment_status_vencido",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794774703709,
+      "tag": "0008_payment_cobertura_numero_muerto",
+      "breakpoints": true
     }
   ]
 }

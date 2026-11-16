@@ -26,6 +26,7 @@ import { NumeroYaTomadoError } from '../../domain/errors/numero.errors';
 import { NUMERO_MUERTO } from '../../domain/entities/numero-tanda.entity';
 import { sortearNumeros } from '../../domain/services/sortear-numeros';
 import { calcularPlan } from '../../domain/services/calcular-plan';
+import { calcularMontoAEntregar } from '../../domain/services/calcular-monto-a-entregar';
 import { generarCalendario, fechaInicioPagos } from '../../domain/services/generar-calendario';
 import { TANDA_REPOSITORY_PORT, type TandaRepositoryPort } from '../../domain/ports/out/tanda-repository.port';
 import { NUMBER_REPOSITORY_PORT, type NumberRepositoryPort } from '../../domain/ports/out/number-repository.port';
@@ -167,6 +168,30 @@ export class TandaService implements TandaUseCasesPort {
     }
 
     const numeros = await this.numberRepository.findNumbersByTanda(idTanda);
+    const participantes = numeros
+      .filter((n) => !n.isDeadNumber)
+      .map((n) => ({
+        idNumber: n.idNumber,
+        numberValue: n.numberValue,
+        nombre: [n.userName, n.userLastName].filter(Boolean).join(' '),
+        isDeadNumber: false,
+        estadoTurno: n.status,
+        idPayment: n.idPayment ?? null,
+        cubiertoPorNumeroMuerto: n.cubiertoPorNumeroMuerto ?? false,
+        estadoPago: n.estadoPago ?? 'PENDIENTE',
+        montoPagado: n.montoPagado ?? 0,
+        fechaPago: n.fechaPago ?? null,
+      }));
+
+    // Se agrega aparte para no alterar la lista de participantes que ya consume el cliente
+    const muerto = numeros.find((n) => n.isDeadNumber);
+    const cubiertos = participantes.filter((p) => p.cubiertoPorNumeroMuerto);
+
+    // Turno que se está cobrando: el número real más bajo que aún no se entrega
+    const vigente = numeros
+      .filter((n) => !n.isDeadNumber && n.status !== 'ENTREGADO')
+      .sort((a, b) => a.numberValue - b.numberValue)[0];
+    const sinPago = participantes.filter((p) => p.idPayment === null).length;
     return {
       tanda: {
         idTanda: tanda.idTanda,
@@ -176,19 +201,30 @@ export class TandaService implements TandaUseCasesPort {
       },
       vueltaActual: 1,
       cuota: tanda.contributionAmount,
-      // shortcut: el número muerto no paga y aquí se omite; la tarjeta SP-4-[FE-AJUSTE] lo agrega
-      participantes: numeros
-        .filter((n) => !n.isDeadNumber)
-        .map((n) => ({
-          idNumber: n.idNumber,
-          numberValue: n.numberValue,
-          nombre: [n.userName, n.userLastName].filter(Boolean).join(' '),
-          isDeadNumber: false,
-          idPayment: n.idPayment ?? null,
-          estadoPago: n.estadoPago ?? 'PENDIENTE',
-          montoPagado: n.montoPagado ?? 0,
-          fechaPago: n.fechaPago ?? null,
-        })),
+      turnoVigente: vigente
+        ? {
+            idNumber: vigente.idNumber,
+            numberValue: vigente.numberValue,
+            estadoTurno: vigente.status,
+            ...calcularMontoAEntregar({
+              montoCuota: tanda.contributionAmount,
+              numParticipantes: tanda.numParticipants,
+              cuotasNoConfirmadas: participantes.filter((p) => p.estadoPago !== 'CONFIRMADO').length,
+            }),
+            bloqueado: vigente.status === 'EN_RIESGO' && sinPago > 0,
+          }
+        : null,
+      numeroMuerto: muerto
+        ? {
+            idNumber: muerto.idNumber,
+            numberValue: muerto.numberValue,
+            estadoTurno: muerto.status,
+            pagosCubiertos: cubiertos.length,
+            // En centavos para no arrastrar errores de punto flotante
+            montoCubierto: cubiertos.reduce((suma, p) => suma + Math.round(p.montoPagado * 100), 0) / 100,
+          }
+        : null,
+      participantes,
     };
   }
 

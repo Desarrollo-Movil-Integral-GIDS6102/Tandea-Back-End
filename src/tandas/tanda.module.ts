@@ -9,6 +9,12 @@ import { NUMBER_REPOSITORY_PORT } from './domain/ports/out/number-repository.por
 import { TANDA_USE_CASES_PORT } from './domain/ports/in/tanda-use-cases.port';
 import { CREATE_TANDA_USE_CASE_PORT } from './domain/ports/in/create-tanda-use-case.port';
 import { ELEGIR_NUMERO_USE_CASE_PORT } from './domain/ports/in/elegir-numero-use-case.port';
+import { CoberturaTurnosService } from './application/services/cobertura-turnos.service';
+import { DrizzleCoberturaRepository } from './infrastructure/adapters/out/database/drizzle-cobertura.repository';
+import { EventEmitterTurnoEventsAdapter } from './infrastructure/adapters/out/events/event-emitter-turno-events.adapter';
+import { CoberturaCron } from './infrastructure/adapters/in/scheduler/cobertura.cron';
+import { COBERTURA_REPOSITORY_PORT } from './domain/ports/out/cobertura-repository.port';
+import { TURNO_EVENTS_PORT } from './domain/ports/out/turno-events.port';
 
 @Module({
   imports: [DatabaseModule],
@@ -16,7 +22,11 @@ import { ELEGIR_NUMERO_USE_CASE_PORT } from './domain/ports/in/elegir-numero-use
   providers: [
     TandaService,
     ElegirNumeroService,
+    CoberturaTurnosService,
+    CoberturaCron,
     DrizzleTandaRepository,
+    { provide: COBERTURA_REPOSITORY_PORT, useClass: DrizzleCoberturaRepository },
+    { provide: TURNO_EVENTS_PORT, useClass: EventEmitterTurnoEventsAdapter },
     {
       provide: TANDA_REPOSITORY_PORT,
       useExisting: DrizzleTandaRepository,
@@ -41,6 +51,7 @@ import { ELEGIR_NUMERO_USE_CASE_PORT } from './domain/ports/in/elegir-numero-use
   exports: [
     TandaService,
     ElegirNumeroService,
+    CoberturaTurnosService,
     TANDA_USE_CASES_PORT,
     CREATE_TANDA_USE_CASE_PORT,
     ELEGIR_NUMERO_USE_CASE_PORT,

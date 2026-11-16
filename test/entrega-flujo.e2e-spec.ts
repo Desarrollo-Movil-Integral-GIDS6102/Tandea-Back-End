@@ -184,6 +184,29 @@ describe.skipIf(!testDbUrl)('Flujo completo de una tanda (Integración)', () => 
     ).rejects.toThrow('Aún no es el turno del número #2');
   });
 
+  it('con cuotas sin confirmar solo se entrega lo confirmado; cuando todos pagan se entrega el total', async () => {
+    const numero = await numeroDe(1);
+
+    // Solo el #1 tiene su pago confirmado: las otras 2 cuotas se descuentan (AP-10)
+    await expect(
+      entregas.registrar(
+        { idNumber: numero.idNumber, transferAmount: 300, cashAmount: 0, evidencia },
+        comoOrganizador(),
+      ),
+    ).rejects.toThrow('deben sumar 100.00 (el total del turno menos 2 cuotas no confirmadas)');
+
+    for (const [i, valor] of [[1, 2], [2, 3]]) {
+      const pago = await pagos.registrar({
+        idUser: participantes[i],
+        idNumber: (await numeroDe(valor)).idNumber,
+        metodoPago: 'efectivo',
+        cashAmount: 100,
+        comprobante: null,
+      });
+      await pagos.confirmar(pago.idPayment!, { idUser: organizador, role: 'usuario' } as never);
+    }
+  });
+
   it('registra la entrega con evidencia y queda esperando al receptor', async () => {
     const numero = await numeroDe(1);
 
