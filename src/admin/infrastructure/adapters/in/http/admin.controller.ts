@@ -24,9 +24,19 @@ import {
   type AdminUsuariosUseCasePort,
 } from '../../../../domain/ports/in/admin-usuarios-use-case.port';
 import {
+
+  ADMIN_DISPUTAS_USE_CASE_PORT,
+  type AdminDisputasUseCasePort,
+} from '../../../../domain/ports/in/admin-disputas-use-case.port';
+import {
   zBuscarUsuariosQuery,
   zSuspenderUsuarioDto,
 } from '../../../../application/dtos/admin-usuarios.dto';
+import {
+  zListarDisputasQuery,
+  zResolverDisputaDto,
+} from '../../../../application/dtos/admin-disputas.dto';
+
 
 /**
  * Endpoints del Administrador Global. Todo el controlador exige rol `admin_global`.
@@ -40,6 +50,10 @@ export class AdminController {
     private readonly metricas: AdminMetricasUseCasePort,
     @Inject(ADMIN_USUARIOS_USE_CASE_PORT)
     private readonly usuarios: AdminUsuariosUseCasePort,
+
+    @Inject(ADMIN_DISPUTAS_USE_CASE_PORT)
+    private readonly disputas: AdminDisputasUseCasePort,
+
   ) {}
 
   /**
@@ -90,4 +104,57 @@ export class AdminController {
       data,
     };
   }
+
+
+  /**
+   * GET /admin/disputas?status=&idTanda=
+   * Lista las disputas reportadas en la plataforma para el Administrador Global.
+   */
+  @Get('disputas')
+  async listarDisputas(@Query() query: unknown) {
+    const filtro = zListarDisputasQuery.parse(query ?? {});
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.disputas.listarDisputas(filtro),
+    };
+  }
+
+  /**
+   * GET /admin/disputas/:id
+   * Detalle de una disputa junto con su bitácora (`audit_log`).
+   */
+  @Get('disputas/:id')
+  async obtenerDisputa(@Param('id', ParseIntPipe) id: number) {
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.disputas.obtenerDisputa(id),
+    };
+  }
+
+  /**
+   * PATCH /admin/disputas/:id/resolver
+   * Resuelve una disputa con `{ accion: mantener|revertir|suspender, notas }` y
+   * guarda el evento en `audit_log` en la misma transacción. Prohibido modificar montos.
+   */
+  @Patch('disputas/:id/resolver')
+  async resolverDisputa(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: unknown,
+    @CurrentUser() admin: AuthenticatedUser,
+  ) {
+    const dto = zResolverDisputaDto.parse(body ?? {});
+    const data = await this.disputas.resolverDisputa({
+      idDispute: id,
+      idAdminGlobal: admin.idUser,
+      accion: dto.accion,
+      notas: dto.notas,
+    });
+
+    return {
+      statusCode: HttpStatus.OK,
+      mensaje: 'Disputa resuelta exitosamente',
+      data,
+    };
+  }
+
 }
