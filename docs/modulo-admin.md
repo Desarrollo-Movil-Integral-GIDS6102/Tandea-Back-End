@@ -27,5 +27,7 @@ El módulo de Administración Global provee visibilidad analítica y herramienta
 * **`GET /api/v1/admin/metricas`**: Calcula y consolida las estadísticas analíticas globales de la plataforma.
 * **`GET /api/v1/admin/usuarios`**: Busca usuarios por nombre, apellido o correo (`?q=`) y permite filtrar por estado (`?active=true|false`).
 * **`PATCH /api/v1/admin/usuarios/:id/suspender`**: Desactiva el acceso de un usuario (`user.active = false`) y registra el evento en `audit_log`.
-* **`GET /api/v1/admin/disputas`**: Lista las quejas o discrepancias entre participantes y organizadores con notas de resolución.
+* **`POST /api/v1/disputas`**: Permite a un miembro de la tanda (participante u organizador) abrir una disputa.
+* **`GET /api/v1/admin/disputas`** y **`GET /api/v1/admin/disputas/:id`**: Lista las disputas y obtiene el detalle del caso con su bitácora (`audit_log`).
+* **`PATCH /api/v1/admin/disputas/:id/resolver`**: Resuelve una disputa con `{ accion: mantener|revertir|suspender, notas }` y registra la resolución en `audit_log` en la misma transacción (sin modificar montos directamente).
 * **`PUT /api/v1/admin/configuracion`**: Actualiza los límites generales del sistema en `platformConfigTable`.
