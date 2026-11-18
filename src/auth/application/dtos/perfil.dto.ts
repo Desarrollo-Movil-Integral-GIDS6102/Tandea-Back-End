@@ -47,3 +47,9 @@ const zCorreo = z
 export const zRecuperarPasswordDto = z.object({ email: zCorreo });
 
 export const zRestablecerPasswordDto = zCambiarPasswordDto.extend({ email: zCorreo });
+
+export const zEliminarCuentaDto = z.object({
+  password: z
+    .string({ required_error: 'La contraseña es requerida' })
+    .min(1, 'La contraseña es requerida'),
+});

@@ -44,4 +44,6 @@ export interface AuthUserRepositoryPort {
   findActivePasswordResetCode(idUser: number): Promise<PasswordResetCodeRecord | null>;
   incrementPasswordResetAttempts(idCode: number): Promise<void>;
   markPasswordResetCodeUsed(idCode: number): Promise<void>;
+  /** Borra al usuario y todo lo suyo en una sola transacción (ver implementación). */
+  deleteAccount(idUser: number): Promise<void>;
 }

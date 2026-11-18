@@ -26,4 +26,9 @@ export interface PerfilUseCasePort {
   /** Olvidé mi contraseña: nunca revela si el correo está registrado. */
   solicitarRecuperacion(email: string): Promise<void>;
   restablecerPassword(email: string, codigo: string, nuevaPassword: string): Promise<void>;
+  /**
+   * Elimina la cuenta y sus datos (exige la contraseña). Las tandas que organiza se borran;
+   * en las demás, el usuario deja de participar. No aplica al administrador global.
+   */
+  eliminarCuenta(idUser: number, password: string): Promise<void>;
 }
