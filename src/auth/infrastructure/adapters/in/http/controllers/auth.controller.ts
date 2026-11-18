@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   HttpCode,
   HttpStatus,
@@ -34,6 +35,7 @@ import {
 import {
   zActualizarPerfilDto,
   zCambiarPasswordDto,
+  zEliminarCuentaDto,
   zRecuperarPasswordDto,
   zRestablecerPasswordDto,
 } from '../../../../../application/dtos/perfil.dto';
@@ -100,6 +102,19 @@ export class AuthController {
       mensaje: 'Perfil actualizado',
       data: await this.perfilService.actualizarPerfil(user.idUser, dto),
     };
+  }
+
+  /**
+   * DELETE /api/v1/auth/perfil
+   * Elimina la cuenta del usuario autenticado. Body: { password }.
+   */
+  @Delete('perfil')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async eliminarCuenta(@Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
+    const dto = zEliminarCuentaDto.parse(body ?? {});
+    await this.perfilService.eliminarCuenta(user.idUser, dto.password);
+    return { mensaje: 'Tu cuenta fue eliminada' };
   }
 
   /**
