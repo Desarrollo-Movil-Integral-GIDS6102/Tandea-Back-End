@@ -25,6 +25,7 @@ El módulo de Administración Global provee visibilidad analítica y herramienta
 ## 🔗 Endpoints del Backend Vinculados (`Tandea-Back-End`)
 
 * **`GET /api/v1/admin/metricas`**: Calcula y consolida las estadísticas analíticas globales de la plataforma.
-* **`PATCH /api/v1/admin/usuarios/:id/suspender`**: Desactiva el acceso de un usuario (`user.active = false`).
+* **`GET /api/v1/admin/usuarios`**: Busca usuarios por nombre, apellido o correo (`?q=`) y permite filtrar por estado (`?active=true|false`).
+* **`PATCH /api/v1/admin/usuarios/:id/suspender`**: Desactiva el acceso de un usuario (`user.active = false`) y registra el evento en `audit_log`.
 * **`GET /api/v1/admin/disputas`**: Lista las quejas o discrepancias entre participantes y organizadores con notas de resolución.
 * **`PUT /api/v1/admin/configuracion`**: Actualiza los límites generales del sistema en `platformConfigTable`.
