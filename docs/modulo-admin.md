@@ -30,4 +30,5 @@ El módulo de Administración Global provee visibilidad analítica y herramienta
 * **`POST /api/v1/disputas`**: Permite a un miembro de la tanda (participante u organizador) abrir una disputa.
 * **`GET /api/v1/admin/disputas`** y **`GET /api/v1/admin/disputas/:id`**: Lista las disputas y obtiene el detalle del caso con su bitácora (`audit_log`).
 * **`PATCH /api/v1/admin/disputas/:id/resolver`**: Resuelve una disputa con `{ accion: mantener|revertir|suspender, notas }` y registra la resolución en `audit_log` en la misma transacción (sin modificar montos directamente).
+
 * **`PUT /api/v1/admin/configuracion`**: Actualiza los límites generales del sistema en `platformConfigTable`.

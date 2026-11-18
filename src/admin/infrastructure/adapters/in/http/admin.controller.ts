@@ -24,6 +24,7 @@ import {
   type AdminUsuariosUseCasePort,
 } from '../../../../domain/ports/in/admin-usuarios-use-case.port';
 import {
+
   ADMIN_DISPUTAS_USE_CASE_PORT,
   type AdminDisputasUseCasePort,
 } from '../../../../domain/ports/in/admin-disputas-use-case.port';
@@ -35,6 +36,7 @@ import {
   zListarDisputasQuery,
   zResolverDisputaDto,
 } from '../../../../application/dtos/admin-disputas.dto';
+
 
 /**
  * Endpoints del Administrador Global. Todo el controlador exige rol `admin_global`.
@@ -48,8 +50,10 @@ export class AdminController {
     private readonly metricas: AdminMetricasUseCasePort,
     @Inject(ADMIN_USUARIOS_USE_CASE_PORT)
     private readonly usuarios: AdminUsuariosUseCasePort,
+
     @Inject(ADMIN_DISPUTAS_USE_CASE_PORT)
     private readonly disputas: AdminDisputasUseCasePort,
+
   ) {}
 
   /**
@@ -101,6 +105,7 @@ export class AdminController {
     };
   }
 
+
   /**
    * GET /admin/disputas?status=&idTanda=
    * Lista las disputas reportadas en la plataforma para el Administrador Global.
@@ -151,4 +156,5 @@ export class AdminController {
       data,
     };
   }
+
 }
