@@ -213,6 +213,56 @@ describe.skipIf(!testDbUrl)('Número muerto: cobertura, riesgo y monto a entrega
   });
 
   describe('con número muerto', () => {
+    it('[SP-4 QA-AJUSTE] cuando un participante no paga, el cron tras días de gracia lo cubre con el número muerto (CONFIRMADO, id_dead_number) y el turno NO pasa a EN_RIESGO', async () => {
+      eventos.publicarNumeroMuertoUsado.mockClear();
+      eventos.publicarTurnoEnRiesgo.mockClear();
+
+      // Escenario de la tarjeta: tanda activa con número muerto (#0),
+      // participantes #1 y #2 pagan (CONFIRMADO) y el participante #3 no paga (null).
+      const t = await crearTanda(true, ['CONFIRMADO', 'CONFIRMADO', null]);
+
+      // Ejecución del cron (CoberturaCron / CoberturaTurnosService) tras vencer los días de gracia
+      const fechaTrasGracia = new Date('2026-09-19T15:00:00.000Z');
+      const resultadoCron = await cobertura.revisarTurnosVencidos(fechaTrasGracia);
+      expect(resultadoCron.cubiertos).toBeGreaterThanOrEqual(1);
+
+      // 1) Verificación directa en PostgreSQL (paymentTable):
+      // El pago faltante del participante #3 queda cubierto con status = 'CONFIRMADO' y id_dead_number = idMuerto
+      const [pagoEnBd] = await db
+        .select()
+        .from(paymentTable)
+        .where(eq(paymentTable.idNumber, t.numeros[2]));
+
+      expect(pagoEnBd).toBeDefined();
+      expect(pagoEnBd.status).toBe('CONFIRMADO');
+      expect(pagoEnBd.idDeadNumber).toBe(t.idMuerto);
+      expect(pagoEnBd.totalAmount).toBe('100.00');
+      expect(pagoEnBd.confirmedByAdmin).toBe(true);
+
+      // 2) Verificación directa en PostgreSQL (numberTable):
+      // El estado en BD del turno beneficiario (#1) NO pasa a EN_RIESGO (permanece PENDIENTE)
+      const [turnoBeneficiarioEnBd] = await db
+        .select()
+        .from(numberTable)
+        .where(eq(numberTable.idNumber, t.numeros[0]));
+
+      expect(turnoBeneficiarioEnBd.status).not.toBe('EN_RIESGO');
+      expect(turnoBeneficiarioEnBd.status).toBe('PENDIENTE');
+
+      // Y el turno está listo para entregarse por el monto total ($300) sin bloqueo
+      const seguimiento = await tandas.obtenerSeguimiento(t.idTanda, organizador, 'usuario');
+      expect(seguimiento.turnoVigente).toMatchObject({
+        numberValue: 1,
+        estadoTurno: 'PENDIENTE',
+        bloqueado: false,
+        montoAEntregar: 300,
+      });
+      expect(seguimiento.numeroMuerto).toMatchObject({
+        pagosCubiertos: 1,
+        montoCubierto: 100,
+      });
+    });
+
     it('cubre los pagos faltantes una sola vez y lo refleja el seguimiento', async () => {
       eventos.publicarNumeroMuertoUsado.mockClear();
       eventos.publicarTurnoEnRiesgo.mockClear();

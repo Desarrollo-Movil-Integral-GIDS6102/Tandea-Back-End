@@ -304,6 +304,45 @@ npx vitest run src/pagos/application/services/pago.service.spec.ts
 
 ---
 
+## 🛡️ 6. Cobertura de Pagos Faltantes con Número Muerto (AP-10 — `SP-4 [QA-AJUSTE]`)
+
+Cuando una tanda activa tiene habilitado el **Número Muerto** (`has_dead_number = true`, número `#0` reservado como fondo de cobertura) y vence el plazo más los días de gracia (`grace_days`) del turno vigente:
+
+1. El cron diario **`CoberturaCron`** (`5 9 * * *` zona `America/Mexico_City`) ejecuta `CoberturaTurnosService.revisarTurnosVencidos()`.
+2. Si algún participante no registró su pago a tiempo, `DrizzleCoberturaRepository.cubrirConNumeroMuerto()` inserta dentro de una transacción con bloqueo `FOR UPDATE` un registro en `payment` por cada cuota faltante con:
+   - `status = 'CONFIRMADO'`
+   - `id_dead_number = <idNumber del número #0>`
+   - `total_amount = <contribution_amount>`
+   - `confirmed_by_admin = true` y `confirmed_by_participant = false`
+3. El turno del beneficiario en la tabla `number` **NO pasa a `EN_RIESGO`** (permanece en `PENDIENTE`, desbloqueado y listo para entregarse por el monto total del turno).
+4. Se emite el evento `numero_muerto.usado` una sola vez (operación idempotente).
+
+### Cómo ejecutar la prueba de integración con PostgreSQL en Docker
+
+```bash
+# 1. Levantar el contenedor PostgreSQL desechable (puerto 5433)
+docker compose -f docker-compose.test.yml up -d
+
+# 2. Aplicar el esquema y los seeds base sobre la BD de pruebas
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tandea_test npm run db:push
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tandea_test npm run db:seed
+
+# 3. Ejecutar la prueba de integración del número muerto
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/tandea_test npx vitest run test/numero-muerto.e2e-spec.ts
+```
+
+En **PowerShell (Windows)**:
+```powershell
+docker compose -f docker-compose.test.yml up -d
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5433/tandea_test"
+npm run db:push
+npm run db:seed
+$env:TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5433/tandea_test"
+npx vitest run test/numero-muerto.e2e-spec.ts
+```
+
+---
+
 ## ⚠️ 6. Limitaciones y Consideraciones Externas
 
 1. **Cuotas y API de Google Cloud Vision**: Requiere habilitar la API de Cloud Vision en la consola de Google Cloud y disponer de cuota activa. En ausencia de credenciales válidas en desarrollo local, el sistema no colapsa y registra una advertencia en el log, permitiendo la revisión manual por parte del organizador.
