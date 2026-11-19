@@ -4,11 +4,13 @@ import {
   Get,
   HttpStatus,
   Inject,
+
   Optional,
   Param,
   ParseIntPipe,
   Patch,
   Put,
+develop
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -26,6 +28,7 @@ import {
   type AdminUsuariosUseCasePort,
 } from '../../../../domain/ports/in/admin-usuarios-use-case.port';
 import {
+
   ADMIN_DISPUTAS_USE_CASE_PORT,
   type AdminDisputasUseCasePort,
 } from '../../../../domain/ports/in/admin-disputas-use-case.port';
@@ -34,6 +37,7 @@ import {
   type AdminConfigUseCasePort,
 } from '../../../../domain/ports/in/admin-config-use-case.port';
 import {
+
   zBuscarUsuariosQuery,
   zSuspenderUsuarioDto,
 } from '../../../../application/dtos/admin-usuarios.dto';
@@ -42,6 +46,7 @@ import {
   zResolverDisputaDto,
 } from '../../../../application/dtos/admin-disputas.dto';
 import { zActualizarConfigDto } from '../../../../application/dtos/admin-config.dto';
+
 
 /**
  * Endpoints del Administrador Global. Todo el controlador exige rol `admin_global`.
@@ -62,6 +67,7 @@ export class AdminController {
     @Optional()
     @Inject(ADMIN_CONFIG_USE_CASE_PORT)
     private readonly config?: AdminConfigUseCasePort,
+
   ) {}
 
   /**
@@ -86,6 +92,7 @@ export class AdminController {
     return {
       statusCode: HttpStatus.OK,
       data: await this.usuarios!.buscarUsuarios(filtro),
+
     };
   }
 
@@ -101,6 +108,7 @@ export class AdminController {
   ) {
     const dto = zSuspenderUsuarioDto.parse(body ?? {});
     const data = await this.usuarios!.suspenderUsuario({
+
       idUser: id,
       idAdminGlobal: admin.idUser,
       motivo: dto.motivo,
@@ -123,6 +131,7 @@ export class AdminController {
     return {
       statusCode: HttpStatus.OK,
       data: await this.disputas!.listarDisputas(filtro),
+
     };
   }
 
@@ -135,6 +144,7 @@ export class AdminController {
     return {
       statusCode: HttpStatus.OK,
       data: await this.disputas!.obtenerDisputa(id),
+
     };
   }
 
@@ -151,6 +161,7 @@ export class AdminController {
   ) {
     const dto = zResolverDisputaDto.parse(body ?? {});
     const data = await this.disputas!.resolverDisputa({
+
       idDispute: id,
       idAdminGlobal: admin.idUser,
       accion: dto.accion,
@@ -163,6 +174,7 @@ export class AdminController {
       data,
     };
   }
+
 
   /**
    * GET /admin/config (y alias /admin/configuracion)
@@ -198,4 +210,5 @@ export class AdminController {
       data,
     };
   }
+
 }

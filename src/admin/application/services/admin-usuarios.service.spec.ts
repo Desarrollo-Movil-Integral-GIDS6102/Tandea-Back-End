@@ -199,8 +199,8 @@ describe('[SP-4 BE-ADMIN] AdminController — Endpoints de usuarios', () => {
       buscarUsuarios: vi.fn().mockResolvedValue([crearUsuarioEjemplo()]),
       suspenderUsuario: vi.fn(),
     };
-    const controller = new AdminController({} as any, usuariosMock, {} as any);
 
+    const controller = new AdminController({} as any, usuariosMock, {} as any);
     const respuesta = await controller.buscarUsuarios({ search: 'Carlos', active: 'true' });
 
     expect(usuariosMock.buscarUsuarios).toHaveBeenCalledWith({
@@ -220,7 +220,6 @@ describe('[SP-4 BE-ADMIN] AdminController — Endpoints de usuarios', () => {
       suspenderUsuario: vi.fn().mockResolvedValue(suspendido),
     };
     const controller = new AdminController({} as any, usuariosMock, {} as any);
-
     const respuesta = await controller.suspenderUsuario(
       15,
       { motivo: 'Impago reiterado' },
