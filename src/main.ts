@@ -18,7 +18,7 @@ async function bootstrap() {
 
   // ── Prefijo global de la API ──────────────────────────────────────────────
   app.setGlobalPrefix('api/v1', {
-    exclude: ['health', ''],
+    exclude: ['health', 'api/v1/health', ''],
   });
 
   // ── CORS ──────────────────────────────────────────────────────────────────
