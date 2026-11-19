@@ -15,6 +15,7 @@ import type {
   AdminDisputasRepositoryPort,
   ResolucionDisputaTransaccion,
 } from '../../domain/ports/out/admin-disputas-repository.port';
+import type { AdminEventsPort } from '../../domain/ports/out/admin-events.port';
 import { AdminController } from '../../infrastructure/adapters/in/http/admin.controller';
 import { DisputasController } from '../../infrastructure/adapters/in/http/disputas.controller';
 import { zResolverDisputaDto } from '../dtos/admin-disputas.dto';
@@ -45,7 +46,7 @@ function disputaEjemplo(parcial: Partial<DisputaDetalle> = {}): DisputaDetalle {
   };
 }
 
-describe('[SP-4 BE-ADMIN] AdminDisputasService — Gestionar disputas y registrar en audit_log', () => {
+describe('[SP-4 BE-ADMIN / INT-ADMIN] AdminDisputasService — Gestionar disputas y registrar en audit_log', () => {
   let repo: {
     obtenerTanda: ReturnType<typeof vi.fn>;
     esParticipanteDeTanda: ReturnType<typeof vi.fn>;
@@ -55,6 +56,10 @@ describe('[SP-4 BE-ADMIN] AdminDisputasService — Gestionar disputas y registra
     listarDisputas: ReturnType<typeof vi.fn>;
     obtenerPorId: ReturnType<typeof vi.fn>;
     resolverConAuditoria: ReturnType<typeof vi.fn>;
+  };
+  let eventos: {
+    publicarUsuarioSuspendido: ReturnType<typeof vi.fn>;
+    publicarDisputaResuelta: ReturnType<typeof vi.fn>;
   };
   let servicio: AdminDisputasService;
 
@@ -83,7 +88,14 @@ describe('[SP-4 BE-ADMIN] AdminDisputasService — Gestionar disputas y registra
           }),
         ),
     };
-    servicio = new AdminDisputasService(repo as unknown as AdminDisputasRepositoryPort);
+    eventos = {
+      publicarUsuarioSuspendido: vi.fn().mockResolvedValue(undefined),
+      publicarDisputaResuelta: vi.fn().mockResolvedValue(undefined),
+    };
+    servicio = new AdminDisputasService(
+      repo as unknown as AdminDisputasRepositoryPort,
+      eventos as unknown as AdminEventsPort,
+    );
   });
 
   describe('crearDisputa (POST /disputas)', () => {
@@ -168,7 +180,7 @@ describe('[SP-4 BE-ADMIN] AdminDisputasService — Gestionar disputas y registra
 
   describe('resolverDisputa (PATCH /admin/disputas/:id/resolver)', () => {
     it.each(['mantener', 'revertir', 'suspender'] as const)(
-      'resuelve con acción "%s" y registra las notas en audit_log en la misma transacción',
+      'resuelve con acción "%s", registra las notas en audit_log y emite el evento disputa.resuelta',
       async (accion) => {
         const resuelta = await servicio.resolverDisputa({
           idDispute: 10,
@@ -190,6 +202,15 @@ describe('[SP-4 BE-ADMIN] AdminDisputasService — Gestionar disputas y registra
           notas: `Se revisó la evidencia y se decide ${accion}`,
           actionType: ACCION_DISPUTA_RESUELTA,
           auditDescription: `Disputa resuelta con acción "${accion}": Se revisó la evidencia y se decide ${accion}`,
+        });
+        expect(eventos.publicarDisputaResuelta).toHaveBeenCalledWith({
+          idDispute: 10,
+          idTanda: 3,
+          nombreTanda: 'Tanda Oficina',
+          emailReporter: 'ana@tandea.com',
+          nombreReporter: 'Ana López',
+          accion,
+          notas: `Se revisó la evidencia y se decide ${accion}`,
         });
       },
     );

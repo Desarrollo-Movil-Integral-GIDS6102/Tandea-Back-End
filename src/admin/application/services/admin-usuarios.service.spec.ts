@@ -11,6 +11,7 @@ import { AuthService } from '../../../auth/application/services/auth.service';
 import { AuthUserEntity } from '../../../auth/domain/entities/auth-user.entity';
 import type { AuthUserRepositoryPort } from '../../../auth/domain/ports/out/auth-user-repository.port';
 import type { UsuarioAdminResumen } from '../../domain/ports/in/admin-usuarios-use-case.port';
+import type { AdminEventsPort } from '../../domain/ports/out/admin-events.port';
 import type {
   AdminUsuariosRepositoryPort,
   RegistroAuditoriaUsuario,
@@ -34,11 +35,15 @@ function crearUsuarioEjemplo(parcial: Partial<UsuarioAdminResumen> = {}): Usuari
   };
 }
 
-describe('[SP-4 BE-ADMIN] AdminUsuariosService — Buscar y suspender usuarios', () => {
+describe('[SP-4 BE-ADMIN / INT-ADMIN] AdminUsuariosService — Buscar y suspender usuarios', () => {
   let repo: {
     buscarUsuarios: ReturnType<typeof vi.fn>;
     obtenerPorId: ReturnType<typeof vi.fn>;
     suspenderConAuditoria: ReturnType<typeof vi.fn>;
+  };
+  let eventos: {
+    publicarUsuarioSuspendido: ReturnType<typeof vi.fn>;
+    publicarDisputaResuelta: ReturnType<typeof vi.fn>;
   };
   let servicio: AdminUsuariosService;
 
@@ -52,7 +57,14 @@ describe('[SP-4 BE-ADMIN] AdminUsuariosService — Buscar y suspender usuarios',
           crearUsuarioEjemplo({ idUser: registro.idUsuarioAfectado, active: false }),
         ),
     };
-    servicio = new AdminUsuariosService(repo as unknown as AdminUsuariosRepositoryPort);
+    eventos = {
+      publicarUsuarioSuspendido: vi.fn().mockResolvedValue(undefined),
+      publicarDisputaResuelta: vi.fn().mockResolvedValue(undefined),
+    };
+    servicio = new AdminUsuariosService(
+      repo as unknown as AdminUsuariosRepositoryPort,
+      eventos as unknown as AdminEventsPort,
+    );
   });
 
   describe('buscarUsuarios', () => {
@@ -78,7 +90,7 @@ describe('[SP-4 BE-ADMIN] AdminUsuariosService — Buscar y suspender usuarios',
   });
 
   describe('suspenderUsuario', () => {
-    it('desactiva al usuario (active = false) y registra la suspensión en audit_log', async () => {
+    it('desactiva al usuario (active = false), registra en audit_log y emite el evento usuario.suspendido', async () => {
       const suspendido = await servicio.suspenderUsuario({
         idUser: 15,
         idAdminGlobal: 1,
@@ -93,9 +105,16 @@ describe('[SP-4 BE-ADMIN] AdminUsuariosService — Buscar y suspender usuarios',
         description:
           'Usuario Carlos Ramírez (carlos@tandea.com) suspendido: Incumplimiento reiterado de pagos',
       });
+      expect(eventos.publicarUsuarioSuspendido).toHaveBeenCalledWith({
+        idUser: 15,
+        name: 'Carlos',
+        lastName: 'Ramírez',
+        email: 'carlos@tandea.com',
+        motivo: 'Incumplimiento reiterado de pagos',
+      });
     });
 
-    it('usa una descripción por defecto en audit_log cuando no se envía motivo', async () => {
+    it('usa una descripción por defecto en audit_log y emite evento sin motivo cuando no se envía motivo', async () => {
       await servicio.suspenderUsuario({
         idUser: 15,
         idAdminGlobal: 1,
@@ -107,6 +126,13 @@ describe('[SP-4 BE-ADMIN] AdminUsuariosService — Buscar y suspender usuarios',
         actionType: ACCION_USUARIO_SUSPENDIDO,
         description:
           'Usuario Carlos Ramírez (carlos@tandea.com) suspendido por el Administrador Global',
+      });
+      expect(eventos.publicarUsuarioSuspendido).toHaveBeenCalledWith({
+        idUser: 15,
+        name: 'Carlos',
+        lastName: 'Ramírez',
+        email: 'carlos@tandea.com',
+        motivo: undefined,
       });
     });
 

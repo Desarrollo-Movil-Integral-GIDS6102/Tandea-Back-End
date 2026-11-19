@@ -71,4 +71,58 @@ export const EmailTemplates = {
       `),
     };
   },
+
+  /**
+   * Notificación de cuenta suspendida por el Administrador Global [SP-4 INT-ADMIN]
+   */
+  userSuspended(data: { name: string; motivo?: string }): { subject: string; html: string } {
+    const detalleMotivo = data.motivo?.trim()
+      ? data.motivo.trim()
+      : 'Incumplimiento de las políticas de uso de la plataforma.';
+    return {
+      subject: 'Aviso importante: Tu cuenta de Tandea ha sido suspendida',
+      html: layout(`
+        <h2 style="color: #922b21; margin-top: 0;">Hola, ${data.name} ⚠️</h2>
+        <p>Te informamos que tu cuenta en <b>Tandea</b> ha sido <b>suspendida</b> por el Administrador Global de la plataforma.</p>
+        <div style="background: #fdedec; border-left: 4px solid #c0392b; border-radius: 6px; padding: 14px 16px; margin: 20px 0;">
+          <span style="font-size: 12px; color: #7b241c; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px;">Motivo de la suspensión</span>
+          <p style="margin: 0; color: #641e16;">${detalleMotivo}</p>
+        </div>
+        <p style="font-size: 14px; color: #5a7280;">Mientras tu cuenta permanezca suspendida no podrás iniciar sesión ni realizar operaciones. Si consideras que se trata de un error, comunícate con el equipo de soporte de Tandea.</p>
+      `),
+    };
+  },
+
+  /**
+   * Resumen de resolución de disputa por el Administrador Global [SP-4 INT-ADMIN]
+   */
+  disputeResolved(data: {
+    name: string;
+    idDispute: number;
+    nombreTanda: string;
+    accion: 'mantener' | 'revertir' | 'suspender';
+    notas: string;
+  }): { subject: string; html: string } {
+    const etiquetasAccion: Record<'mantener' | 'revertir' | 'suspender', string> = {
+      mantener: 'Mantener el estado actual',
+      revertir: 'Revertir a estado pendiente para nueva revisión',
+      suspender: 'Suspender la tanda asociada',
+    };
+    const descripcionAccion = etiquetasAccion[data.accion] ?? data.accion;
+
+    return {
+      subject: `Resolución de tu disputa #${data.idDispute} en "${data.nombreTanda}"`,
+      html: layout(`
+        <h2 style="color: #1b4f72; margin-top: 0;">Hola, ${data.name} 📋</h2>
+        <p>El Administrador Global ha revisado y resuelto la disputa <b>#${data.idDispute}</b> correspondiente a la tanda <b>${data.nombreTanda}</b>.</p>
+        <div style="background: #eaf3fa; border: 1px solid #bfd7ea; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 8px;"><b>Disputa:</b> #${data.idDispute}</p>
+          <p style="margin: 0 0 8px;"><b>Tanda:</b> ${data.nombreTanda}</p>
+          <p style="margin: 0 0 8px;"><b>Decisión aplicada (${data.accion}):</b> ${descripcionAccion}</p>
+          <p style="margin: 0;"><b>Notas de resolución:</b> ${data.notas}</p>
+        </div>
+        <p style="font-size: 14px; color: #5a7280;">Esta resolución ha quedado registrada de forma inmutable en la bitácora de auditoría de Tandea.</p>
+      `),
+    };
+  },
 };

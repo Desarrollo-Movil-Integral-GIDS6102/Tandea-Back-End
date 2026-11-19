@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type {
   AdminUsuariosUseCasePort,
@@ -12,6 +13,10 @@ import type {
   UsuarioAdminResumen,
 } from '../../domain/ports/in/admin-usuarios-use-case.port';
 import {
+  ADMIN_EVENTS_PORT,
+  type AdminEventsPort,
+} from '../../domain/ports/out/admin-events.port';
+import {
   ADMIN_USUARIOS_REPOSITORY_PORT,
   type AdminUsuariosRepositoryPort,
 } from '../../domain/ports/out/admin-usuarios-repository.port';
@@ -19,15 +24,18 @@ import {
 export const ACCION_USUARIO_SUSPENDIDO = 'USUARIO_SUSPENDIDO';
 
 /**
- * [SP-4 BE-ADMIN] Búsqueda y suspensión de usuarios por el Administrador Global.
- * Cada suspensión desactiva la cuenta (`active = false`) y deja constancia inmutable
- * en `audit_log` (`entity_type = 'user'`).
+ * [SP-4 BE-ADMIN / INT-ADMIN] Búsqueda y suspensión de usuarios por el Administrador Global.
+ * Cada suspensión desactiva la cuenta (`active = false`), deja constancia inmutable
+ * en `audit_log` (`entity_type = 'user'`) y emite el evento `usuario.suspendido`.
  */
 @Injectable()
 export class AdminUsuariosService implements AdminUsuariosUseCasePort {
   constructor(
     @Inject(ADMIN_USUARIOS_REPOSITORY_PORT)
     private readonly repositorio: AdminUsuariosRepositoryPort,
+    @Optional()
+    @Inject(ADMIN_EVENTS_PORT)
+    private readonly eventos?: AdminEventsPort,
   ) {}
 
   async buscarUsuarios(filtro?: BuscarUsuariosFiltro): Promise<UsuarioAdminResumen[]> {
@@ -57,11 +65,21 @@ export class AdminUsuariosService implements AdminUsuariosUseCasePort {
       ? `Usuario ${usuario.name} ${usuario.lastName} (${usuario.email}) suspendido: ${motivo}`
       : `Usuario ${usuario.name} ${usuario.lastName} (${usuario.email}) suspendido por el Administrador Global`;
 
-    return this.repositorio.suspenderConAuditoria({
+    const suspendido = await this.repositorio.suspenderConAuditoria({
       idAdminGlobal: comando.idAdminGlobal,
       idUsuarioAfectado: usuario.idUser,
       actionType: ACCION_USUARIO_SUSPENDIDO,
       description,
     });
+
+    await this.eventos?.publicarUsuarioSuspendido({
+      idUser: usuario.idUser,
+      name: usuario.name,
+      lastName: usuario.lastName,
+      email: usuario.email,
+      motivo: motivo && motivo.length > 0 ? motivo : undefined,
+    });
+
+    return suspendido;
   }
 }

@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type {
   AdminDisputasUseCasePort,
@@ -18,22 +19,30 @@ import {
   ADMIN_DISPUTAS_REPOSITORY_PORT,
   type AdminDisputasRepositoryPort,
 } from '../../domain/ports/out/admin-disputas-repository.port';
+import {
+  ADMIN_EVENTS_PORT,
+  type AdminEventsPort,
+} from '../../domain/ports/out/admin-events.port';
 
 export const ACCION_DISPUTA_RESUELTA = 'DISPUTA_RESUELTA';
 
 /**
- * [SP-4 BE-ADMIN] Gestión de disputas y registro de su resolución en `audit_log`.
+ * [SP-4 BE-ADMIN / INT-ADMIN] Gestión de disputas y registro de su resolución en `audit_log`.
  *
  *  - `POST /disputas`: solo miembros de la tanda (participante u organizador).
  *  - `GET /admin/disputas` y `GET /admin/disputas/:id`: lista y detalle para `admin_global`.
- *  - `PATCH /admin/disputas/:id/resolver`: resuelve con `{ accion: mantener|revertir|suspender, notas }`
- *    y guarda en `audit_log` dentro de la misma transacción, sin modificar montos directamente.
+ *  - `PATCH /admin/disputas/:id/resolver`: resuelve con `{ accion: mantener|revertir|suspender, notas }`,
+ *    guarda en `audit_log` dentro de la misma transacción (sin modificar montos directamente)
+ *    y emite el evento `disputa.resuelta`.
  */
 @Injectable()
 export class AdminDisputasService implements AdminDisputasUseCasePort {
   constructor(
     @Inject(ADMIN_DISPUTAS_REPOSITORY_PORT)
     private readonly repositorio: AdminDisputasRepositoryPort,
+    @Optional()
+    @Inject(ADMIN_EVENTS_PORT)
+    private readonly eventos?: AdminEventsPort,
   ) {}
 
   async crearDisputa(comando: CrearDisputaCommand): Promise<DisputaResumen> {
@@ -116,7 +125,7 @@ export class AdminDisputasService implements AdminDisputasUseCasePort {
 
     const auditDescription = `Disputa resuelta con acción "${comando.accion}": ${notas}`;
 
-    return this.repositorio.resolverConAuditoria({
+    const resuelta = await this.repositorio.resolverConAuditoria({
       idDispute: disputa.idDispute,
       idTanda: disputa.idTanda,
       idPayment: disputa.idPayment,
@@ -127,5 +136,17 @@ export class AdminDisputasService implements AdminDisputasUseCasePort {
       actionType: ACCION_DISPUTA_RESUELTA,
       auditDescription,
     });
+
+    await this.eventos?.publicarDisputaResuelta({
+      idDispute: disputa.idDispute,
+      idTanda: disputa.idTanda,
+      nombreTanda: disputa.nombreTanda,
+      emailReporter: disputa.emailReporter,
+      nombreReporter: disputa.nombreReporter,
+      accion: comando.accion,
+      notas,
+    });
+
+    return resuelta;
   }
 }
