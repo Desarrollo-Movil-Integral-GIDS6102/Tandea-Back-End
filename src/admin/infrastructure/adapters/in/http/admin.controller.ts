@@ -4,9 +4,13 @@ import {
   Get,
   HttpStatus,
   Inject,
+
+  Optional,
   Param,
   ParseIntPipe,
   Patch,
+  Put,
+develop
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -29,6 +33,11 @@ import {
   type AdminDisputasUseCasePort,
 } from '../../../../domain/ports/in/admin-disputas-use-case.port';
 import {
+  ADMIN_CONFIG_USE_CASE_PORT,
+  type AdminConfigUseCasePort,
+} from '../../../../domain/ports/in/admin-config-use-case.port';
+import {
+
   zBuscarUsuariosQuery,
   zSuspenderUsuarioDto,
 } from '../../../../application/dtos/admin-usuarios.dto';
@@ -36,6 +45,7 @@ import {
   zListarDisputasQuery,
   zResolverDisputaDto,
 } from '../../../../application/dtos/admin-disputas.dto';
+import { zActualizarConfigDto } from '../../../../application/dtos/admin-config.dto';
 
 
 /**
@@ -48,11 +58,15 @@ export class AdminController {
   constructor(
     @Inject(ADMIN_METRICAS_USE_CASE_PORT)
     private readonly metricas: AdminMetricasUseCasePort,
+    @Optional()
     @Inject(ADMIN_USUARIOS_USE_CASE_PORT)
-    private readonly usuarios: AdminUsuariosUseCasePort,
-
+    private readonly usuarios?: AdminUsuariosUseCasePort,
+    @Optional()
     @Inject(ADMIN_DISPUTAS_USE_CASE_PORT)
-    private readonly disputas: AdminDisputasUseCasePort,
+    private readonly disputas?: AdminDisputasUseCasePort,
+    @Optional()
+    @Inject(ADMIN_CONFIG_USE_CASE_PORT)
+    private readonly config?: AdminConfigUseCasePort,
 
   ) {}
 
@@ -77,7 +91,8 @@ export class AdminController {
     const filtro = zBuscarUsuariosQuery.parse(query ?? {});
     return {
       statusCode: HttpStatus.OK,
-      data: await this.usuarios.buscarUsuarios(filtro),
+      data: await this.usuarios!.buscarUsuarios(filtro),
+
     };
   }
 
@@ -92,7 +107,8 @@ export class AdminController {
     @CurrentUser() admin: AuthenticatedUser,
   ) {
     const dto = zSuspenderUsuarioDto.parse(body ?? {});
-    const data = await this.usuarios.suspenderUsuario({
+    const data = await this.usuarios!.suspenderUsuario({
+
       idUser: id,
       idAdminGlobal: admin.idUser,
       motivo: dto.motivo,
@@ -105,7 +121,6 @@ export class AdminController {
     };
   }
 
-
   /**
    * GET /admin/disputas?status=&idTanda=
    * Lista las disputas reportadas en la plataforma para el Administrador Global.
@@ -115,7 +130,8 @@ export class AdminController {
     const filtro = zListarDisputasQuery.parse(query ?? {});
     return {
       statusCode: HttpStatus.OK,
-      data: await this.disputas.listarDisputas(filtro),
+      data: await this.disputas!.listarDisputas(filtro),
+
     };
   }
 
@@ -127,7 +143,8 @@ export class AdminController {
   async obtenerDisputa(@Param('id', ParseIntPipe) id: number) {
     return {
       statusCode: HttpStatus.OK,
-      data: await this.disputas.obtenerDisputa(id),
+      data: await this.disputas!.obtenerDisputa(id),
+
     };
   }
 
@@ -143,7 +160,8 @@ export class AdminController {
     @CurrentUser() admin: AuthenticatedUser,
   ) {
     const dto = zResolverDisputaDto.parse(body ?? {});
-    const data = await this.disputas.resolverDisputa({
+    const data = await this.disputas!.resolverDisputa({
+
       idDispute: id,
       idAdminGlobal: admin.idUser,
       accion: dto.accion,
@@ -153,6 +171,42 @@ export class AdminController {
     return {
       statusCode: HttpStatus.OK,
       mensaje: 'Disputa resuelta exitosamente',
+      data,
+    };
+  }
+
+
+  /**
+   * GET /admin/config (y alias /admin/configuracion)
+   * Obtiene los parámetros globales de la plataforma (`platform_config`).
+   */
+  @Get(['config', 'configuracion'])
+  async obtenerConfiguracion() {
+    return {
+      statusCode: HttpStatus.OK,
+      data: await this.config!.obtenerConfiguracion(),
+    };
+  }
+
+  /**
+   * PUT /admin/config (y alias /admin/configuracion)
+   * Actualiza los límites globales (`maxUsersPerTanda`, `maxActiveTandasPerUser`, `maxGraceDays`)
+   * y guarda `id_updated_by` con el Administrador Global autenticado.
+   */
+  @Put(['config', 'configuracion'])
+  async actualizarConfiguracion(
+    @Body() body: unknown,
+    @CurrentUser() admin: AuthenticatedUser,
+  ) {
+    const dto = zActualizarConfigDto.parse(body ?? {});
+    const data = await this.config!.actualizarConfiguracion({
+      ...dto,
+      idUpdatedBy: admin.idUser,
+    });
+
+    return {
+      statusCode: HttpStatus.OK,
+      mensaje: 'Configuración global actualizada exitosamente',
       data,
     };
   }
