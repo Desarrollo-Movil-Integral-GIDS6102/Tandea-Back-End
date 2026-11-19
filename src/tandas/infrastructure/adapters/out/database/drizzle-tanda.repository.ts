@@ -21,6 +21,7 @@ import {
   numberTable,
   paymentTable,
   payoutTable,
+  platformConfigTable,
   userTable,
 } from '../../../../../database/tandea.schema';
 import { Tanda, TandaStatus } from '../../../../domain/entities/tanda.entity';
@@ -38,6 +39,7 @@ import {
   CursorHistorial,
   MovimientoRecord,
   ListarMovimientosOptions,
+  LimitesPlataforma,
 } from '../../../../domain/ports/out/tanda-repository.port';
 import {
   NumberRepositoryPort,
@@ -81,6 +83,36 @@ export class DrizzleTandaRepository
       .returning();
 
     return this.mapToDomain(row);
+  }
+
+  async obtenerLimitesPlataforma(): Promise<LimitesPlataforma | null> {
+    const [fila] = await this.db
+      .select({
+        maxUsersPerTanda: platformConfigTable.maxUsersPerTanda,
+        maxActiveTandasPerUser: platformConfigTable.maxActiveTandasPerUser,
+        maxGraceDays: platformConfigTable.maxGraceDays,
+      })
+      .from(platformConfigTable)
+      .orderBy(asc(platformConfigTable.idConfig))
+      .limit(1);
+
+    return fila ?? null;
+  }
+
+  async contarTandasActivasDeOrganizador(idAdmin: number): Promise<number> {
+    const [fila] = await this.db
+      .select({ total: count() })
+      .from(tandaTable)
+      .where(
+        and(
+          eq(tandaTable.idAdmin, idAdmin),
+          eq(tandaTable.active, true),
+          isNull(tandaTable.deletedAt),
+          inArray(tandaTable.status, ['PENDIENTE', 'ACTIVA']),
+        ),
+      );
+
+    return Number(fila?.total ?? 0);
   }
 
   async findById(idTanda: number): Promise<Tanda | null> {

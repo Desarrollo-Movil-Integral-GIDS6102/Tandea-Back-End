@@ -57,6 +57,31 @@ export class TandaService implements TandaUseCasesPort {
       throw new BadRequestException('Una tanda requiere al menos 3 participantes');
     }
 
+    // 1.1 Validar límites globales configurados en platform_config (si están disponibles)
+    const limites = await this.tandaRepository.obtenerLimitesPlataforma?.();
+    if (limites) {
+      if (command.numParticipants > limites.maxUsersPerTanda) {
+        throw new BadRequestException(
+          `El número de participantes (${command.numParticipants}) excede el máximo permitido (${limites.maxUsersPerTanda})`,
+        );
+      }
+
+      const diasGracia = command.graceDays ?? 0;
+      if (diasGracia > limites.maxGraceDays) {
+        throw new BadRequestException(
+          `Los días de gracia (${diasGracia}) exceden el máximo permitido (${limites.maxGraceDays})`,
+        );
+      }
+
+      const tandasActivas =
+        (await this.tandaRepository.contarTandasActivasDeOrganizador?.(command.idAdmin)) ?? 0;
+      if (tandasActivas >= limites.maxActiveTandasPerUser) {
+        throw new BadRequestException(
+          `Has alcanzado el máximo de tandas activas permitidas por usuario (${limites.maxActiveTandasPerUser})`,
+        );
+      }
+    }
+
     // 2. Generar código único y verificar colisión en BD
     let inviteCode = '';
     let isUnique = false;

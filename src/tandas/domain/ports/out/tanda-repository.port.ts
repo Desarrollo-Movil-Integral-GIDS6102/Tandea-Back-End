@@ -48,6 +48,12 @@ export interface ListarMovimientosOptions {
   limit: number;
 }
 
+export interface LimitesPlataforma {
+  maxUsersPerTanda: number;
+  maxActiveTandasPerUser: number;
+  maxGraceDays: number;
+}
+
 export interface TandaRepositoryPort {
   create(tanda: Tanda): Promise<Tanda>;
   findById(idTanda: number): Promise<Tanda | null>;
@@ -58,6 +64,10 @@ export interface TandaRepositoryPort {
   findAll(options: TandaFilterOptions): Promise<{ data: Tanda[]; total: number }>;
   /** Pagos y cobros de la tanda unidos vía `number`, del más reciente al más antiguo (AP-09). */
   listarMovimientos(idTanda: number, options: ListarMovimientosOptions): Promise<MovimientoRecord[]>;
+  /** Lee los límites de `platform_config` para validar la creación de tandas. */
+  obtenerLimitesPlataforma?(): Promise<LimitesPlataforma | null>;
+  /** Cuenta las tandas activas o pendientes (`PENDIENTE` / `ACTIVA`) que organiza un usuario. */
+  contarTandasActivasDeOrganizador?(idAdmin: number): Promise<number>;
 }
 
 export const TANDA_REPOSITORY_PORT = Symbol('TANDA_REPOSITORY_PORT');
