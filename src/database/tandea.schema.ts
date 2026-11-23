@@ -249,12 +249,18 @@ export const paymentTable = pgTable(
     confirmedByAdmin: boolean('confirmed_by_admin').notNull().default(false),
     rejectionReason: text('rejection_reason'),
     status: paymentStatusEnum('status').notNull().default('PENDIENTE'),
+    // Pago de cobertura (AP-10): si no es nulo, el número muerto cubrió esta cuota que el
+    // participante no pagó en su plazo. `id_number` sigue siendo el número que debía pagar.
+    idDeadNumber: integer('id_dead_number').references(() => numberTable.idNumber, {
+      onDelete: 'restrict',
+    }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index('payment_id_number_idx').on(t.idNumber),
     index('payment_id_number_status_idx').on(t.idNumber, t.status),
+    index('payment_id_dead_number_idx').on(t.idDeadNumber),
   ],
 );
 

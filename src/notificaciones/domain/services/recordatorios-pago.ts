@@ -36,7 +36,7 @@ export interface RecordatorioPago {
 /**
  * Turno que se está cobrando hoy: el primero que genera pagos y cuya fecha
  * límite (fechaCobro + días de gracia) todavía no pasa. El turno #0 del
- * número muerto no genera pagos y se salta.
+ * número muerto también genera pagos.
  */
 export function turnoEnCobro(
   tanda: TandaParaRecordatorio,

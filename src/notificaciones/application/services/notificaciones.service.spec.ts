@@ -67,6 +67,80 @@ describe('NotificacionesService', () => {
     });
   });
 
+  describe('turno.en_riesgo (AP-10)', () => {
+    const evento = {
+      idTanda: ID_TANDA,
+      nombreTanda: 'Tanda de la oficina',
+      idNumber: 40,
+      numero: 2,
+      idOrganizador: ID_ORGANIZADOR,
+      idBeneficiario: ID_PARTICIPANTE,
+      pagosFaltantes: 2,
+      montoFaltante: 200,
+    };
+
+    it('avisa al organizador y al beneficiario', async () => {
+      await service.alTurnoEnRiesgo(evento);
+
+      expect(repositorio.guardar).toHaveBeenCalledTimes(2);
+      expect(repositorio.guardar).toHaveBeenCalledWith(
+        expect.objectContaining({ idUser: ID_ORGANIZADOR, idTanda: ID_TANDA, type: 'turno_en_riesgo' }),
+      );
+      expect(repositorio.guardar).toHaveBeenCalledWith(
+        expect.objectContaining({ idUser: ID_PARTICIPANTE, type: 'turno_en_riesgo' }),
+      );
+      expect(push.enviar).toHaveBeenCalledWith(
+        ID_ORGANIZADOR,
+        'Turno en riesgo',
+        expect.stringContaining('faltan 2 pagos'),
+        { type: 'turno_en_riesgo', route: `/tandas/detalle/${ID_TANDA}` },
+      );
+    });
+
+    it('si organizador y beneficiario son la misma persona, recibe un solo aviso', async () => {
+      await service.alTurnoEnRiesgo({ ...evento, idBeneficiario: ID_ORGANIZADOR });
+
+      expect(repositorio.guardar).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('numero_muerto.usado (AP-10)', () => {
+    const evento = {
+      idTanda: ID_TANDA,
+      nombreTanda: 'Tanda de la oficina',
+      idNumeroMuerto: 500,
+      idOrganizador: ID_ORGANIZADOR,
+      numeroDelTurno: 1,
+      montoCubierto: 200,
+      cubiertos: [
+        { idPayment: 900, idNumber: 41, numero: 2, idUser: ID_PARTICIPANTE },
+        { idPayment: 901, idNumber: 42, numero: 3, idUser: ID_ORGANIZADOR },
+      ],
+    };
+
+    it('avisa al organizador del total cubierto y a cada participante cubierto', async () => {
+      await service.alUsarseNumeroMuerto(evento);
+
+      expect(repositorio.guardar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idUser: ID_ORGANIZADOR,
+          type: 'numero_muerto_usado',
+          message: expect.stringContaining('cubrió 2 pagos faltantes'),
+        }),
+      );
+      expect(repositorio.guardar).toHaveBeenCalledWith(
+        expect.objectContaining({ idUser: ID_PARTICIPANTE, type: 'numero_muerto_usado' }),
+      );
+    });
+
+    it('si el organizador es uno de los cubiertos, no se avisa dos veces a sí mismo', async () => {
+      await service.alUsarseNumeroMuerto(evento);
+
+      const aOrganizador = repositorio.guardar.mock.calls.filter(([n]) => n.idUser === ID_ORGANIZADOR);
+      expect(aOrganizador).toHaveLength(1);
+    });
+  });
+
   describe('pago.confirmado', () => {
     it('avisa al participante dueño del número', async () => {
       await service.alConfirmarPago({ paymentId: ID_PAGO, tandaId: ID_TANDA, confirmedByAdmin: true });

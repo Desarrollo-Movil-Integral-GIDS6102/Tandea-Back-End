@@ -334,13 +334,11 @@ describe('PagoService', () => {
           vi.useRealTimers();
         });
 
-        it('rechaza el pago mientras la tanda está en el turno #0', async () => {
-          // Inicio 2026-11-01 semanal: el turno #1 empieza el 2026-11-08
+        it('acepta el pago mientras la tanda está en el turno #0', async () => {
+          // Inicio 2026-11-01 semanal: hoy (11-05) todavía es el turno #0 y todos pagan
           repo.buscarNumeroConCuota.mockResolvedValue(tandaConMuerto('2026-11-01'));
 
-          await expect(registrar()).rejects.toThrowError(ReglaNegocioPagoError);
-          expect(storage.subir).not.toHaveBeenCalled();
-          expect(repo.create).not.toHaveBeenCalled();
+          await expect(registrar()).resolves.toBeInstanceOf(Pago);
         });
 
         it('acepta el pago una vez terminado el turno #0', async () => {

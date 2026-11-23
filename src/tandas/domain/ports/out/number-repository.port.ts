@@ -22,6 +22,8 @@ export interface NumberRecord {
   userEmail?: string | null;
   /** Pago vigente (PENDIENTE o CONFIRMADO) del número; un pago rechazado no cuenta. */
   idPayment?: number | null;
+  /** true si el pago vigente lo cubrió el número muerto (AP-10), no el participante. */
+  cubiertoPorNumeroMuerto?: boolean;
   estadoPago?: string | null;
   montoPagado?: number | null;
   fechaPago?: Date | null;

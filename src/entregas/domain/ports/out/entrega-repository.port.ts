@@ -3,6 +3,7 @@ export const ENTREGA_REPOSITORY_PORT = Symbol('ENTREGA_REPOSITORY_PORT');
 export interface NumeroParaEntrega {
   idNumber: number;
   numberValue: number;
+  roundNumber: number;
   idUser: number | null;
   isDeadNumber: boolean;
   status: string;
@@ -39,8 +40,26 @@ export interface RegistrarEntregaData {
   evidenceUrl: string;
 }
 
+/** Estado de un número de la tanda, para saber si la vuelta ya terminó. */
+export interface NumeroDeLaVueltaRecord {
+  roundNumber: number;
+  isDeadNumber: boolean;
+  status: string;
+}
+
+/** Cuotas de una tanda que siguen sin cerrarse, contadas sobre `payment` (sin columnas cacheadas). */
+export interface CuotasPendientes {
+  /** Números con dueño que no tienen ningún pago PENDIENTE ni CONFIRMADO. */
+  sinPago: number;
+  /** Números con dueño cuyo pago no está CONFIRMADO (incluye a los de `sinPago`). */
+  noConfirmadas: number;
+}
+
 export interface EntregaRepositoryPort {
   buscarNumero(idNumber: number): Promise<NumeroParaEntrega | null>;
+  contarCuotasPendientes(idTanda: number): Promise<CuotasPendientes>;
+  /** Todos los números (incluido el muerto) de la tanda en esa vuelta. */
+  listarNumerosDeLaVuelta(idTanda: number, roundNumber: number): Promise<NumeroDeLaVueltaRecord[]>;
   /** Número de participante más bajo cuyo turno no se ha cerrado. */
   buscarTurnoVigente(idTanda: number): Promise<number | null>;
   /** Crea payout y evidence en una transacción; null si el turno ya tenía entrega. */

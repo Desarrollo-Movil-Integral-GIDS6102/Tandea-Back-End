@@ -265,6 +265,21 @@ export class AuthService implements LoginUseCasePort, RegisterUseCasePort, Perfi
     await this.cambiarPassword(user.idUser, codigo, nuevaPassword);
   }
 
+  async eliminarCuenta(idUser: number, password: string): Promise<void> {
+    const user = await this.userRepository.findById(idUser);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    if (user.role === 'admin_global') {
+      throw new ForbiddenException('La cuenta de administrador global no se puede eliminar desde la app');
+    }
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      // 400 y no 401: un 401 con sesión activa haría que la app cierre la sesión
+      throw new BadRequestException('La contraseña es incorrecta');
+    }
+    await this.userRepository.deleteAccount(idUser);
+  }
+
   private aPerfil(user: AuthUserEntity): PerfilUsuario {
     return {
       idUser: user.idUser,

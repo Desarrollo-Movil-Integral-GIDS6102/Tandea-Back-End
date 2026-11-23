@@ -38,8 +38,8 @@ export interface TurnoCalendario {
  * 1. En cada vuelta los turnos van en orden de número: #0 (si hay número muerto) y luego #1..#N.
  * 2. fechaCobro del turno k (1-based, contando todas las vueltas) = startDate + (k - 1) periodos,
  *    igual que `calcularPlan`, así el último turno cae en la fechaFin de la tanda.
- * 3. El turno #0 no genera pagos (montoAEsperar = 0): los pagos inician al terminar ese turno.
- * 4. En los demás turnos se espera la cuota de cada número de participante (cuota * N).
+ * 3. En todos los turnos, incluido el #0 del número muerto, todos los participantes pagan
+ *    y se espera la cuota de cada número (cuota * N). El #0 solo se distingue porque no tiene dueño.
  */
 export function generarCalendario(input: GenerarCalendarioInput): TurnoCalendario[] {
   const fechaInicio = fechaDesdeIso(input.startDate);
@@ -71,7 +71,7 @@ export function generarCalendario(input: GenerarCalendarioInput): TurnoCalendari
           esNumeroMuerto,
           usuario: usuarios.get(numero) ?? null,
           fechaCobro: aIso(sumarPeriodos(fechaInicio, input.periodicidad, calendario.length)),
-          montoAEsperar: esNumeroMuerto ? 0 : montoTurno,
+          montoAEsperar: montoTurno,
         }),
       );
     }
@@ -81,15 +81,15 @@ export function generarCalendario(input: GenerarCalendarioInput): TurnoCalendari
 }
 
 /**
- * Primer día en que se aceptan pagos: con número muerto es el fin del turno #0
- * (startDate + 1 periodo); sin número muerto, la misma startDate.
+ * Primer día en que se aceptan pagos: siempre la startDate, porque el turno #0
+ * del número muerto también se paga.
  */
 export function fechaInicioPagos(
   startDate: string,
-  periodicidad: PeriodicidadTanda,
-  tieneNumeroMuerto: boolean,
+  _periodicidad: PeriodicidadTanda,
+  _tieneNumeroMuerto: boolean,
 ): string {
-  return aIso(sumarPeriodos(fechaDesdeIso(startDate), periodicidad, tieneNumeroMuerto ? 1 : 0));
+  return aIso(fechaDesdeIso(startDate));
 }
 
 // Mediodía UTC para que el día no cambie al operar con la zona horaria del servidor

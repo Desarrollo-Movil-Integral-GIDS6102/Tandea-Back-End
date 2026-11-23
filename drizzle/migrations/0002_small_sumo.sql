@@ -1,1 +1,1 @@
-ALTER TABLE "payment" ADD COLUMN "rejection_reason" text;
+ALTER TABLE "payment" ADD COLUMN IF NOT EXISTS "rejection_reason" text;
